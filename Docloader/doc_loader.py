@@ -10,6 +10,7 @@ import logging
 import faker
 import Docloader.docgen_template as template
 import SDKs.DynamoDB.dynamo_sdk as dynamoSdk
+from SDKs.MongoDB.MongoSDK import MongoSDK
 
 
 class DocLoader:
@@ -82,7 +83,6 @@ class DocLoader:
         :param max_concurrent_batches:
         """
         start = time.time()
-        print(start)
         dynamo_obj = dynamoSdk.DynamoDb(url, table)
         with concurrent.futures.ThreadPoolExecutor(max_concurrent_batches) as executor:
             futures = []
@@ -113,3 +113,51 @@ class DocLoader:
         end = time.time()
         time_spent = end - start
         logging.info(f"Took {time_spent} to insert docs")
+
+    def load_doc_to_mongo(self, mongoConfig, collection_name, num_docs, batch_size):
+        """
+            Insert documents into the MongoDB collection.
+
+            :param mongoConfig: MongoDB configuration -> object of class MongoConfig
+            :param collection_name: Name of the collection to insert documents into
+            :param num_docs: Total number of documents to insert
+            :param batch_size: Number of documents to insert per batch.
+        """
+
+        mongo_obj = MongoSDK(mongoConfig)
+
+        total_documents = num_docs
+        batch_size = batch_size
+        max_concurrent_batches = 500
+        start = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_concurrent_batches) as executor:
+            for i in range(0, total_documents, batch_size):
+                batch_start = i
+                batch_end = min(i + batch_size, total_documents)
+                data_to_insert = self.generate_fake_documents_concurrently(
+                    batch_end - batch_start)
+                if data_to_insert:
+                    executor.submit(mongo_obj.insert_multiple_document, collection_name, data_to_insert)
+        end = time.time()
+        logging.info(f"Took {end - start} to insert docs")
+
+    def delete_from_mongo(self, mongoConfig, collection_name, delete_query):
+        """
+            Delete documents from the MongoDB collection based on the deletion query
+            :param mongoConfig: MongoDB configuration -> object of class MongoConfig
+            :param collection_name: Name of the collection to delete documents from
+            :param delete_query: The query used to filter and delete documents.
+        """
+        mongo_obj = MongoSDK(mongoConfig)
+        mongo_obj.delete_document(collection_name, delete_query)
+
+    def update_in_mongo(self, mongoConfig, collection_name, updateFrom, updateTo):
+        """
+            Update documents in the MongoDB collection based on the update query
+            :param mongoConfig: MongoDB configuration -> object of class MongoConfig
+            :param collection_name: Name of the collection to update documents in
+            :param updateFrom: The query used to filter documents to be updated
+            :param updateTo: The update operation to apply to matching documents.
+        """
+        mongo_obj = MongoSDK(mongoConfig)
+        mongo_obj.update_document(collection_name, updateFrom, updateTo)
