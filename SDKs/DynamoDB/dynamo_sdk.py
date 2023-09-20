@@ -15,10 +15,16 @@ class DynamoDb:
     SDK class for dynamoDb, Helps in managing dynamoDB entities
     """
 
-    def __init__(self, endpoint_url, table=None, region=None):
-        self.dyn_resource = boto3.resource(
+    def __init__(self, endpoint_url=None, table=None, region=None):
+        if endpoint_url is None and region is None:
+            raise ValueError("DynamoDB URL or region is required")
+        if endpoint_url is None:
+            self.dyn_resource = boto3.resource('dynamodb', region_name=region)
+        else:
+            self.dyn_resource = boto3.resource(
             'dynamodb', endpoint_url=endpoint_url)
         self.table = self.dyn_resource.Table(name=table) if table else None
+        self.table_name = table
         self.region = region
 
     def create_table(self, table_name, key_schema,
@@ -68,7 +74,7 @@ class DynamoDb:
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
 
-    def delete_item(self, item_key, condition_expression=None,
+    def delete_item(self, item_key=None, condition_expression=None,
                     expression_attribute_values=None, **params):
         """
         Delete an item in inside the dynamoDB tables
@@ -77,9 +83,9 @@ class DynamoDb:
         :param expression_attribute_values:
         :param params:
         """
-        delete_params = {
-            'Key': item_key
-        }
+        delete_params = {}
+        if item_key:
+            delete_params['Key'] = item_key
         if condition_expression:
             delete_params['ConditionExpression'] = condition_expression
         if expression_attribute_values:

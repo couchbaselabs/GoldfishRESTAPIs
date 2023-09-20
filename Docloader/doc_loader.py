@@ -74,16 +74,18 @@ class DocLoader:
                     print(f"An error occurred: {err}")
         return documents
 
-    def load_doc_to_dynamo(self, url, table, batch_size=1000, max_concurrent_batches=1000):
+    def load_doc_to_dynamo(self, url=None, table=None, region_name=None, batch_size=1000, max_concurrent_batches=1000):
         """
 
         :param url: dynamoDB url
         :param table: dynamoDb table name
         :param batch_size:
         :param max_concurrent_batches:
+        :param region_name: Region in which dynamodb table is deployed
+        Either region or url is required, table name is required if table already exist
         """
         start = time.time()
-        dynamo_obj = dynamoSdk.DynamoDb(url, table)
+        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region_name=region_name)
         with concurrent.futures.ThreadPoolExecutor(max_concurrent_batches) as executor:
             futures = []
             for i in range(0, self.no_of_docs, batch_size):
@@ -114,6 +116,38 @@ class DocLoader:
         time_spent = end - start
         logging.info(f"Took {time_spent} to insert docs")
 
+    def delete_from_dynamodb(self, url=None, table=None, region_name=None, item_key=None, condition_expression=None,
+                    expression_attribute_values=None, **params):
+        """
+
+        Args:
+            url: Url of dynamodb
+            table: table name of dynamodb
+            region_name: region in which dynamodb is deployed
+            item_key: item_key to be deleted
+            condition_expression: condition to delete object
+            expression_attribute_values: attribute values
+            **params: extra parameters
+        Either region or url is required, table name is required if table already exist
+        """
+        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region_name=region_name)
+        dynamo_obj.delete_item(item_key, condition_expression, expression_attribute_values, params)
+
+    def update_in_dynamo(self, item_key, changed_object_json, url=None, table=None, region_name=None):
+        """
+
+        Args:
+            item_key: item to change
+            changed_object_json: keys to change
+            url:
+            table:
+            region_name:
+        Either region or url is required, table name is required if table already exist
+        """
+        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region_name=region_name)
+        dynamo_obj.update_item(item_key, changed_object_json)
+
+
     def load_doc_to_mongo(self, mongoConfig, collection_name, num_docs, batch_size):
         """
             Insert documents into the MongoDB collection.
@@ -141,23 +175,23 @@ class DocLoader:
         end = time.time()
         logging.info(f"Took {end - start} to insert docs")
 
-    def delete_from_mongo(self, mongoConfig, collection_name, delete_query):
+    def delete_from_mongo(self, mongo_config, collection_name, delete_query):
         """
             Delete documents from the MongoDB collection based on the deletion query
-            :param mongoConfig: MongoDB configuration -> object of class MongoConfig
+            :param mongo_config: MongoDB configuration -> object of class MongoConfig
             :param collection_name: Name of the collection to delete documents from
             :param delete_query: The query used to filter and delete documents.
         """
-        mongo_obj = MongoSDK(mongoConfig)
+        mongo_obj = MongoSDK(mongo_config)
         mongo_obj.delete_document(collection_name, delete_query)
 
-    def update_in_mongo(self, mongoConfig, collection_name, updateFrom, updateTo):
+    def update_in_mongo(self, mongo_config, collection_name, update_from, update_to):
         """
             Update documents in the MongoDB collection based on the update query
-            :param mongoConfig: MongoDB configuration -> object of class MongoConfig
+            :param mongo_config: MongoDB configuration -> object of class MongoConfig
             :param collection_name: Name of the collection to update documents in
-            :param updateFrom: The query used to filter documents to be updated
-            :param updateTo: The update operation to apply to matching documents.
+            :param update_from: The query used to filter documents to be updated
+            :param update_to: The update operation to apply to matching documents.
         """
-        mongo_obj = MongoSDK(mongoConfig)
-        mongo_obj.update_document(collection_name, updateFrom, updateTo)
+        mongo_obj = MongoSDK(mongo_config)
+        mongo_obj.update_document(collection_name, update_from, update_to)
