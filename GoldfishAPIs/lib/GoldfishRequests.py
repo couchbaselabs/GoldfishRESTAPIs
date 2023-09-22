@@ -4,7 +4,7 @@ import logging
 import pprint
 
 from .GoldfishAuth import GoldfishAuth
-from .GoldfishExtentions import (
+from .GoldfishExceptions import (
     MissingAccessKeyError,
     MissingSecretKeyError,
     GenericHTTPError,
