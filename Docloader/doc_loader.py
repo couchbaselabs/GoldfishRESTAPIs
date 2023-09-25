@@ -8,10 +8,10 @@ import concurrent.futures
 import time
 import logging
 import faker
+import random
 import Docloader.docgen_template as template
 import SDKs.DynamoDB.dynamo_sdk as dynamoSdk
 from SDKs.MongoDB.MongoSDK import MongoSDK
-
 
 class DocLoader:
     """
@@ -147,7 +147,6 @@ class DocLoader:
         dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region_name=region_name)
         dynamo_obj.update_item(item_key, changed_object_json)
 
-
     def load_doc_to_mongo(self, mongoConfig, collection_name, num_docs, batch_size):
         """
             Insert documents into the MongoDB collection.
@@ -157,7 +156,6 @@ class DocLoader:
             :param num_docs: Total number of documents to insert
             :param batch_size: Number of documents to insert per batch.
         """
-
         mongo_obj = MongoSDK(mongoConfig)
 
         total_documents = num_docs
@@ -175,16 +173,6 @@ class DocLoader:
         end = time.time()
         logging.info(f"Took {end - start} to insert docs")
 
-    def delete_from_mongo(self, mongo_config, collection_name, delete_query):
-        """
-            Delete documents from the MongoDB collection based on the deletion query
-            :param mongo_config: MongoDB configuration -> object of class MongoConfig
-            :param collection_name: Name of the collection to delete documents from
-            :param delete_query: The query used to filter and delete documents.
-        """
-        mongo_obj = MongoSDK(mongo_config)
-        mongo_obj.delete_document(collection_name, delete_query)
-
     def update_in_mongo(self, mongo_config, collection_name, update_from, update_to):
         """
             Update documents in the MongoDB collection based on the update query
@@ -195,3 +183,74 @@ class DocLoader:
         """
         mongo_obj = MongoSDK(mongo_config)
         mongo_obj.update_document(collection_name, update_from, update_to)
+
+    def delete_from_mongo(self, mongo_config, collection_name, delete_query):
+        """
+            Delete documents from the MongoDB collection based on the deletion query
+            :param mongo_config: MongoDB configuration -> object of class MongoConfig
+            :param collection_name: Name of the collection to delete documents from
+            :param delete_query: The query used to filter and delete documents.
+        """
+        mongo_obj = MongoSDK(mongo_config)
+        mongo_obj.delete_document(collection_name, delete_query)
+
+    def perform_random_update(self, mongo_obj, collection_name):
+        random_doc = mongo_obj.get_random_doc(collection_name)
+        if random_doc:
+            updated_doc = self.generate_docs()
+            updated_doc["_id"] = random_doc["_id"]
+
+            mongo_obj.update_document(collection_name, {"_id": updated_doc["_id"]}, updated_doc)
+
+    def delete_random_doc(self, mongo_obj, collection_name):
+        total_documents = mongo_obj.get_current_doc_count(collection_name)
+        if total_documents == 0:
+            return
+
+        random_document = mongo_obj.get_random_doc(collection_name)
+        mongo_obj.delete_document(collection_name, {"_id": random_document["_id"]})\
+
+    def calculate_optimal_batch_size(self, target_docs, current_docs, max_batch_size, upper_factor=0.1, lower_factor=0.01):
+        doc_difference = target_docs - current_docs
+        initial_batch_size = int(doc_difference * upper_factor)
+        initial_batch_size = min(max_batch_size, max(1, initial_batch_size))
+        if initial_batch_size < doc_difference * lower_factor:
+            initial_batch_size = int(doc_difference * lower_factor)
+        return min(max_batch_size, max(1, initial_batch_size))
+
+    def perform_crud_on_mongo(self, mongo_config, collection_name, target_num_docs, time_for_crud_in_mins, num_buffer=500):
+        mongo_object = MongoSDK(mongo_config)
+        start_time = time.time()
+        while time.time() - start_time < time_for_crud_in_mins * 60:
+
+            operation = random.choice(["update", "insert", "delete"])
+            # Perform a random operation based on the selected type
+            if operation == "update":
+                    self.perform_random_update(mongo_object, collection_name)
+            elif operation == "insert":
+                    mongo_object.insert_single_document(collection_name, self.generate_docs())
+            elif operation == "delete":
+                    self.delete_random_doc(mongo_object, collection_name)
+
+            current_docs = mongo_object.get_current_doc_count(collection_name)
+
+            if target_num_docs > num_buffer and current_docs < target_num_docs - num_buffer:
+                while current_docs < target_num_docs:
+                    batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
+                    self.load_doc_to_mongo(mongo_config,collection_name,target_num_docs-current_docs,batch_size)
+                    current_docs = mongo_object.get_current_doc_count(collection_name)
+
+            elif current_docs > target_num_docs + num_buffer:
+                while current_docs > target_num_docs:
+                    self.delete_random_doc(mongo_object, collection_name)
+                    current_docs = mongo_object.get_current_doc_count(collection_name)
+
+        current_docs = mongo_object.get_current_doc_count(collection_name)
+        while current_docs < target_num_docs:
+            batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
+            print(current_docs, target_num_docs, batch_size)
+            self.load_doc_to_mongo(mongo_config, collection_name, target_num_docs - current_docs, batch_size)
+            current_docs = mongo_object.get_current_doc_count(collection_name)
+        while current_docs > target_num_docs:
+            self.delete_random_doc(mongo_object, collection_name)
+            current_docs = mongo_object.get_current_doc_count(collection_name)

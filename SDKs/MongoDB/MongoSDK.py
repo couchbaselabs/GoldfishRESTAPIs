@@ -2,7 +2,6 @@ from pymongo import MongoClient
 from .MongoConfig import MongoConfig
 import logging
 
-
 class MongoSDK(MongoConfig):
     """
      A MongoDB SDK class for performing database operations.
@@ -51,6 +50,12 @@ class MongoSDK(MongoConfig):
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         self.log.addHandler(handler)
+
+    def close_mongoDB_connection(self):
+        """
+            Close the MongoDB connection
+        """
+        self.client.close()
 
     def insert_single_document(self, collection_name, data):
         """
@@ -106,3 +111,11 @@ class MongoSDK(MongoConfig):
         update_result = collection.update_many(query, {"$set": update_data})
         self.log.info(
             f"Update result: {update_result.modified_count} documents updated")
+
+    def get_current_doc_count(self, collection_name):
+        collection = self.db[collection_name]
+        return collection.count_documents({})
+
+    def get_random_doc(self, collection_name):
+        collection =self.db[collection_name]
+        return collection.find_one({})
