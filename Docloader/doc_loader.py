@@ -85,7 +85,7 @@ class DocLoader:
         Either region or url is required, table name is required if table already exist
         """
         start = time.time()
-        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region_name=region_name)
+        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region=region_name)
         with concurrent.futures.ThreadPoolExecutor(max_concurrent_batches) as executor:
             futures = []
             for i in range(0, self.no_of_docs, batch_size):
@@ -130,7 +130,7 @@ class DocLoader:
             **params: extra parameters
         Either region or url is required, table name is required if table already exist
         """
-        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region_name=region_name)
+        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region=region_name)
         dynamo_obj.delete_item(item_key, condition_expression, expression_attribute_values, params)
 
     def update_in_dynamo(self, item_key, changed_object_json, url=None, table=None, region_name=None):
@@ -144,7 +144,7 @@ class DocLoader:
             region_name:
         Either region or url is required, table name is required if table already exist
         """
-        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region_name=region_name)
+        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region=region_name)
         dynamo_obj.update_item(item_key, changed_object_json)
 
     def load_doc_to_mongo(self, mongoConfig, collection_name, num_docs, batch_size):
