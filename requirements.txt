@@ -3,3 +3,6 @@ pymongo==4.5.0
 boto3==1.28.49
 cassandra-driver==3.28.0
 Faker==19.6.2
+fastavro==1.8.3
+pandas==2.0.3
+pyarrow==13.0.0

@@ -9,9 +9,14 @@ import time
 import logging
 import faker
 import random
+import string
 import Docloader.docgen_template as template
 import SDKs.DynamoDB.dynamo_sdk as dynamoSdk
 from SDKs.MongoDB.MongoSDK import MongoSDK
+from SDKs.MongoDB.MongoConfig import MongoConfig
+from SDKs.s3.s3_SDK import s3SDK
+from SDKs.s3.s3_config import s3Config
+
 
 class DocLoader:
     """
@@ -117,7 +122,7 @@ class DocLoader:
         logging.info(f"Took {time_spent} to insert docs")
 
     def delete_from_dynamodb(self, url=None, table=None, region_name=None, item_key=None, condition_expression=None,
-                    expression_attribute_values=None, **params):
+                             expression_attribute_values=None, **params):
         """
 
         Args:
@@ -194,7 +199,15 @@ class DocLoader:
         mongo_obj = MongoSDK(mongo_config)
         mongo_obj.delete_document(collection_name, delete_query)
 
-    def perform_random_update(self, mongo_obj, collection_name):
+    def perform_random_update(self, mongo_config, collection_name):
+        """
+            Perform a random update operation on a document in the MongoDB collection.
+
+            Parameters:
+            - mongo_config : Object of class SDKs.MongoDB.MongoConfig
+            - collection_name (str): The name of the MongoDB collection to perform the update on.
+        """
+        mongo_obj = MongoSDK(mongo_config)
         random_doc = mongo_obj.get_random_doc(collection_name)
         if random_doc:
             updated_doc = self.generate_docs()
@@ -202,15 +215,37 @@ class DocLoader:
 
             mongo_obj.update_document(collection_name, {"_id": updated_doc["_id"]}, updated_doc)
 
-    def delete_random_doc(self, mongo_obj, collection_name):
+    def delete_random_doc(self, mongo_config, collection_name):
+        """
+            Delete a random document from the MongoDB collection.
+
+            Parameters:
+            - mongo_config : Object of class SDKs.MongoDB.MongoConfig
+            - collection_name (str): The name of the MongoDB collection to perform the deletion on.
+        """
+        mongo_obj = MongoSDK(mongo_config)
         total_documents = mongo_obj.get_current_doc_count(collection_name)
         if total_documents == 0:
             return
 
         random_document = mongo_obj.get_random_doc(collection_name)
-        mongo_obj.delete_document(collection_name, {"_id": random_document["_id"]})\
+        mongo_obj.delete_document(collection_name, {"_id": random_document["_id"]})
 
-    def calculate_optimal_batch_size(self, target_docs, current_docs, max_batch_size, upper_factor=0.1, lower_factor=0.01):
+    def calculate_optimal_batch_size(self, target_docs, current_docs, max_batch_size, upper_factor=0.1,
+                                     lower_factor=0.01):
+        """
+            Calculate the optimal batch size for CRUD operations based on the current and target number of documents.
+
+            Parameters:
+            - target_docs (int): The target number of documents to be inserted or updated.
+            - current_docs (int): The current number of documents in the collection.
+            - max_batch_size (int): The maximum allowed batch size for the operations.
+            - upper_factor (float): The upper factor to adjust the batch size. Default is 0.1 (10% increase).
+            - lower_factor (float): The lower factor to adjust the batch size. Default is 0.01 (1% decrease).
+
+            Returns:
+            - int: The calculated optimal batch size.
+        """
         doc_difference = target_docs - current_docs
         initial_batch_size = int(doc_difference * upper_factor)
         initial_batch_size = min(max_batch_size, max(1, initial_batch_size))
@@ -218,7 +253,22 @@ class DocLoader:
             initial_batch_size = int(doc_difference * lower_factor)
         return min(max_batch_size, max(1, initial_batch_size))
 
-    def perform_crud_on_mongo(self, mongo_config, collection_name, target_num_docs, time_for_crud_in_mins, num_buffer=500):
+    def perform_crud_on_mongo(self, mongo_config, collection_name, target_num_docs, time_for_crud_in_mins,
+                              num_buffer=500):
+        """
+            Perform CRUD operations on a MongoDB collection.
+
+            Parameters:
+            - mongo_config : Object of class SDKs.MongoDB.MongoConfig
+            - collection_name (str): The name of the MongoDB collection to perform CRUD operations on.
+            - target_num_docs (int): The target number of documents to be inserted into the collection.
+            - time_for_crud_in_mins (int): The total time (in minutes) allowed for performing CRUD operations.
+            - num_buffer (int): The number of documents to buffer before inserting into the database. Default is 500.
+        """
+
+        if not isinstance(mongo_config, MongoConfig):
+            raise ValueError("config parameter must be an instance of MongoConfig class")
+
         mongo_object = MongoSDK(mongo_config)
         start_time = time.time()
         while time.time() - start_time < time_for_crud_in_mins * 60:
@@ -226,18 +276,18 @@ class DocLoader:
             operation = random.choice(["update", "insert", "delete"])
             # Perform a random operation based on the selected type
             if operation == "update":
-                    self.perform_random_update(mongo_object, collection_name)
+                self.perform_random_update(mongo_config, collection_name)
             elif operation == "insert":
-                    mongo_object.insert_single_document(collection_name, self.generate_docs())
+                mongo_object.insert_single_document(collection_name, self.generate_docs())
             elif operation == "delete":
-                    self.delete_random_doc(mongo_object, collection_name)
+                self.delete_random_doc(mongo_config, collection_name)
 
             current_docs = mongo_object.get_current_doc_count(collection_name)
 
             if target_num_docs > num_buffer and current_docs < target_num_docs - num_buffer:
                 while current_docs < target_num_docs:
                     batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
-                    self.load_doc_to_mongo(mongo_config,collection_name,target_num_docs-current_docs,batch_size)
+                    self.load_doc_to_mongo(mongo_config, collection_name, target_num_docs - current_docs, batch_size)
                     current_docs = mongo_object.get_current_doc_count(collection_name)
 
             elif current_docs > target_num_docs + num_buffer:
@@ -254,3 +304,26 @@ class DocLoader:
         while current_docs > target_num_docs:
             self.delete_random_doc(mongo_object, collection_name)
             current_docs = mongo_object.get_current_doc_count(collection_name)
+
+    def create_s3_using_specified_config(self, s3_config):
+        """
+               Create an S3 client using the specified configuration.
+
+               Parameters:
+               - s3_config (dict): An object of SDK.s3.s3_config
+        """
+        if not isinstance(s3_config, s3Config):
+            raise ValueError("config parameter must be an instance of s3Config class")
+
+        buckets = []
+        s3 = s3SDK(s3_config.access_key, s3_config.secret_key)
+        random_string = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
+
+        for i in range(s3_config.num_buckets):
+            bucket = s3.create_bucket(f"goldfishxx{random_string}xx{i}{i}{i}", s3_config.region)
+            if bucket:
+                buckets.append(f"goldfishxx{random_string}xx{i}{i}{i}")
+
+        print(f"Created buckets {buckets}")
+        for bucket in buckets:
+            s3.generate_and_upload_structure(s3_config, bucket, file_types=s3_config.file_format)
