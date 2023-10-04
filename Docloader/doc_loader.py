@@ -18,6 +18,7 @@ from SDKs.s3.s3_SDK import s3SDK
 from SDKs.s3.s3_config import s3Config
 
 
+
 class DocLoader:
     """
     DocLoader class has the function to generate document based on size and number.
@@ -27,10 +28,11 @@ class DocLoader:
     -no_of_docs: Default is 100
     """
 
-    def __init__(self, document_size=1024, no_of_docs=100):
+    def __init__(self, document_size=1024, no_of_docs=100, stop_loader=False):
         self.document_size = document_size
         self.no_of_docs = no_of_docs
         self.index = 0
+        self.stop_loader = stop_loader
 
     def float_to_str(self, obj: any) -> any:
         """
@@ -253,7 +255,7 @@ class DocLoader:
             initial_batch_size = int(doc_difference * lower_factor)
         return min(max_batch_size, max(1, initial_batch_size))
 
-    def perform_crud_on_mongo(self, mongo_config, collection_name, target_num_docs, time_for_crud_in_mins,
+    def perform_crud_on_mongo(self, mongo_config, collection_name, target_num_docs, time_for_crud_in_mins=None,
                               num_buffer=500):
         """
             Perform CRUD operations on a MongoDB collection.
@@ -270,8 +272,12 @@ class DocLoader:
             raise ValueError("config parameter must be an instance of MongoConfig class")
 
         mongo_object = MongoSDK(mongo_config)
-        start_time = time.time()
-        while time.time() - start_time < time_for_crud_in_mins * 60:
+        time_for_crud = True
+        if time_for_crud_in_mins is not None:
+            start_time = time.time()
+            time_for_crud = time.time() - start_time < time_for_crud_in_mins * 60
+
+        while not self.stop_loader and time_for_crud:
 
             operation = random.choice(["update", "insert", "delete"])
             # Perform a random operation based on the selected type
@@ -295,15 +301,42 @@ class DocLoader:
                     self.delete_random_doc(mongo_object, collection_name)
                     current_docs = mongo_object.get_current_doc_count(collection_name)
 
-        current_docs = mongo_object.get_current_doc_count(collection_name)
-        while current_docs < target_num_docs:
-            batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
-            print(current_docs, target_num_docs, batch_size)
-            self.load_doc_to_mongo(mongo_config, collection_name, target_num_docs - current_docs, batch_size)
+        if not self.stop_loader:
             current_docs = mongo_object.get_current_doc_count(collection_name)
-        while current_docs > target_num_docs:
-            self.delete_random_doc(mongo_object, collection_name)
-            current_docs = mongo_object.get_current_doc_count(collection_name)
+            while current_docs < target_num_docs:
+                batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
+                print(current_docs, target_num_docs, batch_size)
+                self.load_doc_to_mongo(mongo_config, collection_name, target_num_docs - current_docs, batch_size)
+                current_docs = mongo_object.get_current_doc_count(collection_name)
+            while current_docs > target_num_docs:
+                self.delete_random_doc(mongo_object, collection_name)
+                current_docs = mongo_object.get_current_doc_count(collection_name)
+
+    def is_loader_running(self):
+        """
+           Check if the loader is currently running.
+
+           Returns:
+               bool: True if the loader is running, False otherwise.
+       """
+        return not self.stop_loader
+
+    def stop_running_loader(self):
+        """
+             Stop the currently running loader.
+
+             This method sets the `stop_loader` flag to True, indicating the loader to stop its operation.
+         """
+        self.stop_loader = True
+
+    def start_running_loader(self):
+        """
+            Start the loader.
+
+            This method sets the `stop_loader` flag to False, allowing the loader to
+            continue or start its operation.
+        """
+        self.stop_loader = False
 
     def create_s3_using_specified_config(self, s3_config):
         """
