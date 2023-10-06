@@ -10,13 +10,15 @@ import logging
 import faker
 import random
 import string
+from concurrent.futures import ThreadPoolExecutor
 import Docloader.docgen_template as template
 import SDKs.DynamoDB.dynamo_sdk as dynamoSdk
 from SDKs.MongoDB.MongoSDK import MongoSDK
 from SDKs.MongoDB.MongoConfig import MongoConfig
 from SDKs.s3.s3_SDK import s3SDK
 from SDKs.s3.s3_config import s3Config
-
+from SDKs.s3.s3_operations import s3Operations
+import os
 
 
 class DocLoader:
@@ -338,7 +340,7 @@ class DocLoader:
         """
         self.stop_loader = False
 
-    def create_s3_using_specified_config(self, s3_config):
+    def create_s3_using_specified_config(self, s3_config, skip_bucket=False, bucket=[]):
         """
                Create an S3 client using the specified configuration.
 
@@ -348,15 +350,119 @@ class DocLoader:
         if not isinstance(s3_config, s3Config):
             raise ValueError("config parameter must be an instance of s3Config class")
 
+        print("Creating the required config. Please wait...")
         buckets = []
+        if bucket:
+            buckets = bucket
         s3 = s3SDK(s3_config.access_key, s3_config.secret_key)
-        random_string = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
+        if not skip_bucket:
+            random_string = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
 
-        for i in range(s3_config.num_buckets):
-            bucket = s3.create_bucket(f"goldfishxx{random_string}xx{i}{i}{i}", s3_config.region)
-            if bucket:
-                buckets.append(f"goldfishxx{random_string}xx{i}{i}{i}")
+            print(f"######## STEP 1/2  : CREATING {s3_config.num_buckets} BUCKETS ########")
+            for i in range(s3_config.num_buckets):
+                bucket = s3.create_bucket(f"goldfishxx{random_string}xx{i}{i}{i}", s3_config.region)
+                if bucket:
+                    buckets.append(f"goldfishxx{random_string}xx{i}{i}{i}")
 
-        print(f"Created buckets {buckets}")
+            print(f"######## STEP 1/2 COMPLETE : CREATED BUCKETS {buckets} ########")
         for bucket in buckets:
+            print(f"######## STEP 2/2  : CREATE REQUIRED FILE STRUCTURE ########")
             s3.generate_and_upload_structure(s3_config, bucket, file_types=s3_config.file_format)
+
+        print(f"######## STEP 2/2  COMPLETE: CREATED REQUIRED FILE STRUCTURE ########")
+        return buckets
+
+    def perform_crud_on_s3(self, config, buckets, duration_minutes, max_files, min_files):
+        """
+        Perform CRUD operations on S3 for a specified duration.
+
+        Parameters:
+        - config (s3Config): An object of SDK.s3.s3_config.
+        - buckets (list): A list of S3 bucket names.
+        - duration_minutes (int): Duration for CRUD operations in minutes.
+        - max_insertions (int): Maximum number of insertions allowed.
+        - max_deletions (int): Maximum number of deletions allowed.
+        """
+        if not isinstance(config, s3Config):
+            raise ValueError("config parameter must be an instance of s3Config class")
+
+        s3 = s3SDK(config.access_key, config.secret_key)
+        s3_config = s3Operations()
+
+        with ThreadPoolExecutor(max_workers=len(buckets)) as executor:
+            futures = []
+            for bucket in buckets:
+                futures.append(
+                    executor.submit(self.crud_for_bucket, config, s3, s3_config, bucket, max_files, min_files,
+                                    duration_minutes))
+
+            # Wait for all tasks to complete
+            for future in futures:
+                future.result()
+
+        print("All CRUD operations completed.")
+
+    def crud_for_bucket(self, config, s3, s3_config, bucket, max_files, min_files, duration_minutes):
+        self.print_s3_bucket_structure(s3, bucket)
+        start_time = time.time()
+        while time.time() - start_time < duration_minutes * 60:
+            # Generate a random depth and folder path
+            depth_lvl = random.randint(0, config.depth_level - 1)
+            folder_path = self.generate_random_folder_path(config.num_folders_per_level, depth_lvl)
+
+            # Check the total number of files in the folder
+            existing_files = s3.list_files_in_folder(bucket, folder_path)
+
+            # Randomly choose insert or delete operation
+            operation = random.choice(["insert", "delete"])
+            # Perform insert operation if there are fewer files than the target and insert operation is chosen
+            if len(existing_files) < max_files and operation == "insert":
+                file_name = f"{random.randint(0, 100)}.{random.choice(config.file_format)}"
+                file_content = s3_config.create_file_with_required_file_type(random.choice(config.file_format),
+                                                                             config.file_size)
+                s3_object_key = os.path.join(folder_path, file_name)
+                print(f"inserting file {file_name} on path {s3_object_key}")
+                s3.upload_file_with_content(bucket, s3_object_key, file_content)
+            # Perform delete operation if there are more files than the target and delete operation is chosen
+            elif len(existing_files) > min_files and operation == "delete":
+                # Choose a random file from existing_files
+                file_path_in_folder = random.choice(existing_files)
+
+                # Extract the file name from the full path
+                file_name = os.path.basename(file_path_in_folder)
+
+                # Construct the S3 object key
+                s3_object_key = os.path.join(folder_path, file_name)
+
+                print(f"deleting file {file_name} on path {s3_object_key}")
+                s3.delete_file(bucket, s3_object_key)
+
+        print("Crud complete")
+        self.print_s3_bucket_structure(s3, bucket)
+
+        self.rebalance_s3(s3, bucket, config)
+
+        self.print_s3_bucket_structure(s3, bucket)
+
+    def generate_random_folder_path(self, num_folders, depth_lvl):
+        """
+        Generate a random folder path based on the specified number of folders and depth level.
+
+        Parameters:
+        - num_folders (int): Number of folders per level.
+        - depth_lvl (int): Depth level.
+
+        Returns:
+        - str: Random folder path.
+        """
+        folder_path = ""
+        for level in range(depth_lvl + 1):
+            folder_path += f'Depth_{level}_Folder_{random.randint(0, num_folders - 1)}/'
+        return folder_path
+
+    def rebalance_s3(self, s3, bucket, config):
+        s3.empty_bucket(bucket)
+        self.create_s3_using_specified_config(config, skip_bucket=True, bucket=[bucket])
+
+    def print_s3_bucket_structure(self, s3, bucket):
+        s3.print_bucket_structure(bucket)

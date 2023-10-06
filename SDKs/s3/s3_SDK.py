@@ -1,9 +1,13 @@
+import time
+
 import boto3
 from botocore.exceptions import ClientError
 from boto3.s3.transfer import TransferConfig
 from SDKs.s3.s3_operations import s3Operations
 import logging
 import os
+from prettytable import PrettyTable
+import concurrent.futures
 
 
 class s3SDK:
@@ -249,8 +253,12 @@ class s3SDK:
     def upload_file_with_content(self, bucket_name, object_key, content):
         try:
             self.s3_client.put_object(Bucket=bucket_name, Key=object_key, Body=content)
+            try:
+                os.remove(content)
+            except:
+                pass
         except Exception as e:
-            self.logger.error(f"Could not upload file in {bucket_name} with path {object_key}")
+            self.logger.error(f"Could not upload file in {bucket_name} with path {object_key} : {str(e)}")
             self.logger.error(e)
 
     def upload_large_file(self, bucket_name, source_path, destination_path,
@@ -303,24 +311,79 @@ class s3SDK:
             return False
 
     def generate_and_upload_structure(self, config, bucket_name, base_path='', depth_lvl=0, file_types=['json']):
-        s3_config = s3Operations(config)
-        if depth_lvl >= s3_config.spec_file.depth_level:
+        s3_op = s3Operations()
+        if depth_lvl >= config.depth_level:
             return
 
-        for folder_num in range(s3_config.spec_file.num_folders_per_level):
-            folder_name = f'Depth_{depth_lvl}_Folder_{folder_num}/'
+        # Define a ThreadPoolExecutor with a maximum of, for example, 5 threads.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = []
 
-            for count, file_type in enumerate(file_types):
-                file_name = f"{count}.{file_type}"
-                file_content = s3_config.create_file_with_required_file_type(file_type, s3_config.spec_file.file_size)
+            for folder_num in range(config.num_folders_per_level):
+                folder_name = f'Depth_{depth_lvl}_Folder_{folder_num}/'
 
-                s3_object_key = os.path.join(base_path, folder_name, file_name)
-                self.upload_file_with_content(bucket_name, s3_object_key, file_content)
-                try:
-                    os.remove(f"output.{file_type}")
-                except:
-                    pass
+                for count, file_type in enumerate(file_types):
+                    file_name = f"{count}.{file_type}"
+                    file_content = s3_op.create_file_with_required_file_type(file_type, config.file_size)
+
+                    s3_object_key = os.path.join(base_path, folder_name, file_name)
+
+                    # Submit the task to the executor
+                    future = executor.submit(
+                        self.upload_file_with_content, bucket_name, s3_object_key, file_content
+                    )
+                    futures.append(future)
+
+            # Wait for all submitted tasks to complete
+            concurrent.futures.wait(futures)
 
             # Recursively create nested folders
-            self.generate_and_upload_structure(config, bucket_name, base_path=os.path.join(base_path, folder_name),
-                                               depth_lvl=depth_lvl + 1, file_types=file_types)
+            for folder_num in range(config.num_folders_per_level):
+                folder_name = f'Depth_{depth_lvl}_Folder_{folder_num}/'
+                self.generate_and_upload_structure(
+                    config,
+                    bucket_name,
+                    base_path=os.path.join(base_path, folder_name),
+                    depth_lvl=depth_lvl + 1,
+                    file_types=file_types
+                )
+
+    def list_files_in_folder(self, bucket, folder_path):
+        """
+        List files in a specific folder within an S3 bucket.
+
+        Parameters:
+        - bucket (str): The name of the S3 bucket.
+        - folder_path (str): The path of the folder within the bucket.
+
+        Returns:
+        - List[str]: A list of file names in the specified folder.
+        """
+        # Add a trailing slash to the folder path if it doesn't exist
+        if not folder_path.endswith('/'):
+            folder_path += '/'
+
+        try:
+            # Use the list_objects_v2 API to get a list of objects in the folder
+            response = self.s3_client.list_objects_v2(
+                Bucket=bucket,
+                Prefix=folder_path
+            )
+
+            files = [obj['Key'] for obj in response.get('Contents', [])]
+
+            return files
+        except Exception as e:
+            print(f"Error listing files in folder {folder_path}: {e}")
+            return []
+
+    def print_bucket_structure(self, bucket):
+        my_bucket = self.s3_resource.Bucket(bucket)
+
+        table = PrettyTable()
+        table.field_names = ["Bucket", "Key"]
+
+        for my_bucket_object in my_bucket.objects.all():
+            table.add_row([my_bucket_object.bucket_name, my_bucket_object.key])
+
+        print(table)

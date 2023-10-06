@@ -5,15 +5,11 @@ import random
 import string
 from faker import Faker
 from fastavro import writer, parse_schema
-from SDKs.s3.s3_config import s3Config
+import tempfile
 
 
 class s3Operations:
-    def __init__(self, config):
-        if not isinstance(config, s3Config):
-            raise ValueError("config parameter must be an instance of s3Config class")
-
-        self.spec_file = config
+    def __init__(self):
         self.faker = Faker()
 
     def create_file_with_required_file_type(self, file_type, doc_size):
@@ -25,12 +21,16 @@ class s3Operations:
             return self.create_tsv_file(doc_size)
         elif file_type == "parquet":
             return self.create_parquet_file(doc_size)
-        elif file_type == "txt":
-            return self.create_text_file(doc_size)
         elif file_type == "avro":
             return self.create_avro_file(doc_size)
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
+
+    def create_unique_temporary_file(self, base_name, file_extension):
+        unique_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+        _, temp_path = tempfile.mkstemp(prefix=f"{base_name}_{unique_suffix}_", suffix=file_extension)
+        print(temp_path)
+        return temp_path
 
     def create_json_file(self, doc_size):
         data = self._generate_data(doc_size)
@@ -44,14 +44,9 @@ class s3Operations:
         data = self._generate_data(doc_size)
         return self._convert_to_tsv(data)
 
-    def create_parquet_file(self, doc_size, output_path='output.parquet'):
+    def create_parquet_file(self, doc_size):
         data = self._generate_data(doc_size)
-        self._convert_to_parquet(data, output_path)
-        return output_path
-
-    def create_text_file(self, doc_size):
-        data = self._generate_data(doc_size)
-        return str(data)
+        return self._convert_to_parquet(data)
 
     def _convert_to_avro_record(self, data, schema):
         record = {}
@@ -64,7 +59,7 @@ class s3Operations:
         return record
 
     def _convert_to_csv(self, data):
-        output_csv = "output.csv"
+        output_csv = self.create_unique_temporary_file("output", '.csv')
         with open(output_csv, "w", newline="") as csvfile:
             csv_writer = csv.DictWriter(csvfile, fieldnames=data.keys())
             csv_writer.writeheader()
@@ -72,16 +67,18 @@ class s3Operations:
         return output_csv
 
     def _convert_to_tsv(self, data):
-        output_tsv = "output.tsv"
+        output_tsv = self.create_unique_temporary_file("output", '.tsv')
         with open(output_tsv, "w", newline="") as tsvfile:
             tsv_writer = csv.DictWriter(tsvfile, fieldnames=data.keys(), delimiter='\t')
             tsv_writer.writeheader()
             tsv_writer.writerow(data)
         return output_tsv
 
-    def _convert_to_parquet(self, data, output_path):
+    def _convert_to_parquet(self, data):
+        output_parquet = self.create_unique_temporary_file("output", '.parquet')
         table = pd.DataFrame([data])
-        table.to_parquet(output_path, index=False, engine='pyarrow')
+        table.to_parquet(output_parquet, index=False, engine='pyarrow')
+        return output_parquet
 
     def _generate_data(self, doc_size):
         data = {
@@ -142,8 +139,8 @@ class s3Operations:
         # Convert data to Avro format
         avro_data = [self._convert_to_avro_record(data, avro_schema)]
 
-        # Write Avro file
-        with open(output_path, "wb") as avro_file:
+        temp_path = tempfile.mktemp(suffix='.avro')
+        with open(temp_path, "wb") as avro_file:
             writer(avro_file, parse_schema(avro_schema), avro_data)
-
-        return output_path
+        print(temp_path)
+        return temp_path

@@ -7,3 +7,4 @@ fastavro==1.8.3
 pandas==2.0.3
 pyarrow==13.0.0
 flask==3.0.0
+prettytable==3.9.0
