@@ -18,6 +18,7 @@ from SDKs.MongoDB.MongoConfig import MongoConfig
 from SDKs.s3.s3_SDK import s3SDK
 from SDKs.s3.s3_config import s3Config
 from SDKs.s3.s3_operations import s3Operations
+from SDKs.MySQL.MySqlSDK import MySQLSDK
 import os
 
 
@@ -478,3 +479,162 @@ class DocLoader:
 
     def print_s3_bucket_structure(self, s3, bucket):
         s3.print_bucket_structure(bucket)
+
+    def load_data_to_mysql(self, mysql_obj, table_name, table_columns, doc_count, record_values=None):
+        for _ in range(doc_count):
+            table_columns_without_id = [col.split()[0] for col in table_columns.split(", ") if
+                                        "AUTO_INCREMENT" not in col]
+            if not record_values:
+                record_values = [
+                    doc["address"],
+                    doc["avg_ratings"],
+                    doc["city"],
+                    doc["country"],
+                    doc["email"],
+                    doc["free_breakfast"],
+                    doc["free_parking"],
+                    doc["name"],
+                    doc["phone"],
+                    doc["price"],
+                    json.dumps(doc["public_likes"]),
+                    json.dumps(doc["reviews"]),
+                    doc["type"],
+                    doc["url"],
+                ]
+            mysql_obj.insert_record_using_columns(table_name, table_columns_without_id, record_values)
+
+    def perform_crud_on_mysql(self, mysql_obj, table_name, table_columns, duration_minutes=None, max_files_extra=50,
+                              atleast_min_files=None):
+
+        infinite_duration = duration_minutes is None
+        start_time = time.time()
+
+        start_count = mysql_obj.get_total_records_count(table_name)
+
+        if atleast_min_files is None:
+            atleast_min_files = min(0, start_count - 50)
+
+        while infinite_duration or (time.time() - start_time) < (duration_minutes * 60):
+            operation = random.choice(["create", "update", "delete"])
+            print(operation)
+            current_records_count = mysql_obj.get_total_records_count(table_name)
+
+            if operation == "create" and start_count + max_files_extra > current_records_count:
+                doc = self.generate_docs()
+
+                table_columns_without_id = [col.split()[0] for col in table_columns.split(", ") if
+                                            "AUTO_INCREMENT" not in col]
+                record_values = [
+                    doc["address"],
+                    doc["avg_ratings"],
+                    doc["city"],
+                    doc["country"],
+                    doc["email"],
+                    doc["free_breakfast"],
+                    doc["free_parking"],
+                    doc["name"],
+                    doc["phone"],
+                    doc["price"],
+                    json.dumps(doc["public_likes"]),
+                    json.dumps(doc["reviews"]),
+                    doc["type"],
+                    doc["url"],
+                ]
+                mysql_obj.insert_record_using_columns(table_name, table_columns_without_id, record_values)
+
+            elif operation == "update":
+                # # Update record
+                record_id = mysql_obj.get_random_record_id(table_name)
+                if record_id is not None:
+                    # Generate a new set of document values
+                    doc = self.generate_docs()
+
+                    # Convert lists and dictionaries to JSON strings
+                    public_likes_json = json.dumps(doc["public_likes"])
+                    reviews_json = json.dumps(doc["reviews"])
+
+                    # Define the update values with the converted JSON strings
+                    update_values = {
+                        "address": doc["address"],
+                        "avg_rating": doc["avg_ratings"],
+                        "city": doc["city"],
+                        "country": doc["country"],
+                        "email": doc["email"],
+                        "free_breakfast": doc["free_breakfast"],
+                        "free_parking": doc["free_parking"],
+                        "name": doc["name"],
+                        "phone": doc["phone"],
+                        "price": doc["price"],
+                        "public_likes": public_likes_json,
+                        "reviews": reviews_json,
+                        "type": doc["type"],
+                        "url": doc["url"],
+                    }
+                    update_query = f"UPDATE {table_name} SET " + ", ".join(
+                        [f"{column} = %s" for column in update_values.keys()]) + f" WHERE id = {record_id}"
+
+                    update_values_list = tuple(update_values.values())
+
+                    # Execute the update query
+                    try:
+                        mysql_obj.update_using_given_query_and_value(update_query, update_values_list)
+                        print(f"Record with ID {record_id} updated successfully.")
+                    except Exception as e:
+                        print(f"Error during update operation: {e}")
+                else:
+                    print("No records found in the table.")
+
+            # print(start_count - atleast_min_files, current_records_count)
+            elif operation == "delete" and start_count - atleast_min_files < current_records_count:
+                print("inside here")
+                record_id = mysql_obj.get_random_record_id(table_name)
+
+                if record_id is not None:
+                    try:
+                        mysql_obj.delete_record(table_name, f"id={record_id}")
+                    except Exception as e:
+                        print(f"Error during delete operation: {e}")
+
+        print("CRUD COMPLETE")
+
+    def rebalance_mysql_docs(self, doc_count, table_name, table_columns, mysql_obj=None, config=None, database_name=None):
+        if not mysql_obj:
+            if config is None or database_name is None:
+                raise Exception("MySQL config and Database name is required")
+            else:
+                mysql_obj = init_mysql_setup(config, database_name)
+
+        current_records_count = mysql_obj.get_total_records_count(table_name)
+        print(current_records_count)
+        while current_records_count > doc_count and current_records_count >= 0:
+            record_id = mysql_obj.get_random_record_id(table_name)
+            if record_id is not None:
+                try:
+                    mysql_obj.delete_record(table_name, f"id={record_id}")
+                    current_records_count -= 1
+                except Exception as e:
+                    print(f"Error during delete operation: {e}")
+
+        while current_records_count < doc_count:
+            doc = self.generate_docs()
+
+            table_columns_without_id = [col.split()[0] for col in table_columns.split(", ") if
+                                        "AUTO_INCREMENT" not in col]
+            record_values = [
+                doc["address"],
+                doc["avg_ratings"],
+                doc["city"],
+                doc["country"],
+                doc["email"],
+                doc["free_breakfast"],
+                doc["free_parking"],
+                doc["name"],
+                doc["phone"],
+                doc["price"],
+                json.dumps(doc["public_likes"]),
+                json.dumps(doc["reviews"]),
+                doc["type"],
+                doc["url"],
+            ]
+            mysql_obj.insert_record_using_columns(table_name, table_columns_without_id, record_values)
+            current_records_count += 1

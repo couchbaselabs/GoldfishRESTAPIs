@@ -107,34 +107,36 @@ class s3Operations:
 
         return data
 
-    def create_avro_file(self, doc_size, output_path='output.avro'):
+    def create_avro_file(self, doc_size, avro_schema=None):
         data = self._generate_data(doc_size)
 
-        # Avro schema definition
-        avro_schema = {
-            "type": "record",
-            "name": "YourData",
-            "fields": [
-                {"name": "address", "type": ["null", "string"], "default": None},
-                {"name": "avgrating", "type": ["null", "double"], "default": None},
-                {"name": "city", "type": ["null", "string"], "default": None},
-                {"name": "country", "type": ["null", "string"], "default": None},
-                {"name": "email", "type": ["null", "string"], "default": None},
-                {"name": "freebreakfast", "type": ["null", "boolean"], "default": None},
-                {"name": "freeparking", "type": ["null", "boolean"], "default": None},
-                {"name": "name", "type": ["null", "string"], "default": None},
-                {"name": "phone", "type": ["null", "string"], "default": None},
-                {"name": "price", "type": ["null", "double"], "default": None},
-                {"name": "publiclikes", "type": {"type": "array", "items": "string"}},
-                {"name": "reviews", "type": {"type": "array", "items": {"type": "record", "name": "Review", "fields": [
-                    {"name": "user", "type": ["null", "string"], "default": None},
-                    {"name": "comment", "type": ["null", "string"], "default": None}
-                ]}}},
-                {"name": "type", "type": ["null", "string"], "default": None},
-                {"name": "url", "type": ["null", "string"], "default": None},
-                {"name": "extra", "type": ["null", "string"], "default": None}
-            ]
-        }
+        if not avro_schema:
+            # Avro schema definition
+            avro_schema = {
+                "type": "record",
+                "name": "YourData",
+                "fields": [
+                    {"name": "address", "type": ["null", "string"], "default": None},
+                    {"name": "avgrating", "type": ["null", "double"], "default": None},
+                    {"name": "city", "type": ["null", "string"], "default": None},
+                    {"name": "country", "type": ["null", "string"], "default": None},
+                    {"name": "email", "type": ["null", "string"], "default": None},
+                    {"name": "freebreakfast", "type": ["null", "boolean"], "default": None},
+                    {"name": "freeparking", "type": ["null", "boolean"], "default": None},
+                    {"name": "name", "type": ["null", "string"], "default": None},
+                    {"name": "phone", "type": ["null", "string"], "default": None},
+                    {"name": "price", "type": ["null", "double"], "default": None},
+                    {"name": "publiclikes", "type": {"type": "array", "items": "string"}},
+                    {"name": "reviews",
+                     "type": {"type": "array", "items": {"type": "record", "name": "Review", "fields": [
+                         {"name": "user", "type": ["null", "string"], "default": None},
+                         {"name": "comment", "type": ["null", "string"], "default": None}
+                     ]}}},
+                    {"name": "type", "type": ["null", "string"], "default": None},
+                    {"name": "url", "type": ["null", "string"], "default": None},
+                    {"name": "extra", "type": ["null", "string"], "default": None}
+                ]
+            }
 
         # Convert data to Avro format
         avro_data = [self._convert_to_avro_record(data, avro_schema)]
