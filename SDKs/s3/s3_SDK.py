@@ -85,12 +85,12 @@ class s3SDK:
             location = {'LocationConstraint': region}
             response = self.s3_resource.Bucket(bucket_name).create(CreateBucketConfiguration=location)
             if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                return True
+                return True, None
             else:
-                return False
+                return False, None
         except Exception as e:
             self.logger.error(e)
-            return False
+            return False, str(e)
 
     def delete_bucket(self, bucket_name, max_retry=5, retry_attempt=0):
         """

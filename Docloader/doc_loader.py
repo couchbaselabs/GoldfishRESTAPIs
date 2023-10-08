@@ -30,11 +30,12 @@ class DocLoader:
     -no_of_docs: Default is 100
     """
 
-    def __init__(self, document_size=1024, no_of_docs=100, stop_loader=False):
+    def __init__(self, document_size=1024, no_of_docs=100):
         self.document_size = document_size
         self.no_of_docs = no_of_docs
         self.index = 0
-        self.stop_loader = stop_loader
+        self.stop_mongo_loader = False
+        self.stop_s3_loader = False
 
     def float_to_str(self, obj: any) -> any:
         """
@@ -314,31 +315,40 @@ class DocLoader:
                 self.delete_random_doc(mongo_object, collection_name)
                 current_docs = mongo_object.get_current_doc_count(collection_name)
 
-    def is_loader_running(self):
+    def is_loader_running(self, db):
         """
            Check if the loader is currently running.
 
            Returns:
                bool: True if the loader is running, False otherwise.
        """
-        return not self.stop_loader
+        if db == "mongo":
+            return not self.stop_mongo_loader
+        else:
+            return not self.stop_s3_loader
 
-    def stop_running_loader(self):
+    def stop_running_loader(self, db):
         """
              Stop the currently running loader.
 
              This method sets the `stop_loader` flag to True, indicating the loader to stop its operation.
          """
-        self.stop_loader = True
+        if db == "mongo":
+            self.stop_mongo_loader = True
+        else:
+            self.stop_s3_loader = True
 
-    def start_running_loader(self):
+    def start_running_loader(self, db):
         """
             Start the loader.
 
             This method sets the `stop_loader` flag to False, allowing the loader to
             continue or start its operation.
         """
-        self.stop_loader = False
+        if db == "mongo":
+            self.stop_mongo_loader = False
+        else:
+            self.stop_s3_loader = False
 
     def create_s3_using_specified_config(self, s3_config, skip_bucket=False, bucket=[]):
         """
@@ -360,9 +370,11 @@ class DocLoader:
 
             print(f"######## STEP 1/2  : CREATING {s3_config.num_buckets} BUCKETS ########")
             for i in range(s3_config.num_buckets):
-                bucket = s3.create_bucket(f"goldfishxx{random_string}xx{i}{i}{i}", s3_config.region)
+                bucket, error = s3.create_bucket(f"goldfishxx{random_string}xx{i}{i}{i}", s3_config.region)
                 if bucket:
                     buckets.append(f"goldfishxx{random_string}xx{i}{i}{i}")
+                else:
+                    return error
 
             print(f"######## STEP 1/2 COMPLETE : CREATED BUCKETS {buckets} ########")
         for bucket in buckets:
@@ -405,7 +417,7 @@ class DocLoader:
     def crud_for_bucket(self, config, s3, s3_config, bucket, max_files, min_files, duration_minutes):
         self.print_s3_bucket_structure(s3, bucket)
         start_time = time.time()
-        while time.time() - start_time < duration_minutes * 60:
+        while not self.stop_s3_loader and time.time() - start_time < duration_minutes * 60:
             # Generate a random depth and folder path
             depth_lvl = random.randint(0, config.depth_level - 1)
             folder_path = self.generate_random_folder_path(config.num_folders_per_level, depth_lvl)
