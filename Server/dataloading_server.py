@@ -154,9 +154,15 @@ def start_s3_loader():
     if params_check[1] != 422:
         if "loader_id" in params:
             loader_id = params['loader_id']
+            result = loader_collection.find_one({"loader_id": params['loader_id']})
+            if not result:
+                rv = {
+                    "ERROR": f"No loader found for loader_id {params['loader_id']}",
+                    "status": "failed"
+                }
+                return jsonify(rv), 409
             loader_obj = loaderIdvsDocobject[loader_id]
             loader_status = loader_obj.is_loader_running(db="s3")
-            result = loader_collection.find_one({"loader_id": params['loader_id']})
 
             if loader_status:
                 rv = {
