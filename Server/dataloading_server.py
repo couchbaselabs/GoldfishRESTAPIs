@@ -3,6 +3,8 @@ from Docloader.doc_loader import DocLoader
 from SDKs.MongoDB.MongoConfig import MongoConfig
 from SDKs.MongoDB.MongoSDK import MongoSDK
 from SDKs.s3.s3_config import s3Config
+from SDKs.MySQL.MySqlSDK import MySQLSDK
+from SDKs.MySQL.MySQL_config import MySQLConfig
 import uuid
 import threading
 
@@ -247,6 +249,133 @@ def stop_s3_loader():
                         "response": f"Loader {loader_id} stopped successfully",
                         "loader_id": loader_id,
                         "bucket": loader['database'],
+                        "status": loader['status']
+                    }
+                    return jsonify(rv), 200
+                else:
+                    return jsonify({"response": f"Loader {loader_id} is not running"}), 200
+
+        return jsonify({"response": f"No loader found with ID {loader_id}"}), 200
+    else:
+        return params_check
+
+def init_mysql_setup(config, database_name, table_columns, table_name):
+    mysql = MySQLSDK(config)
+    mysql.create_connection()
+    mysql.create_database(database_name)
+    mysql.use_database(database_name)
+    mysql.create_table(table_name, table_columns)
+    return mysql
+
+@app.route('/mysql/start_loader', methods=['POST'])
+def start_mysql_loader():
+    params = request.json
+    checklist = ["host", "port", "username", "password", "database_name", "table_name", "table_columns"]
+
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        loaders = loader_collection.find({})
+        # check if there is a loader already running on same db and collection
+        for loader in loaders:
+            if loader['database'] == params['database_name'] and loader['collection'] == params['table_name'] and \
+                    loader['status'] == "running":
+                rv = {
+                    "ERROR": f"There is already a loader running on {params['database_name']} and {params['table_name']}. You can poll for the loader to be stopped",
+                    "loader_id": loader['loader_id'],
+                    "database": loader['database'],
+                    "table": loader['collection'],
+                    "status": "failed"
+                }
+                return jsonify(rv), 409
+
+        if "loader_id" in params:
+            params['init_config'] = False
+            result = loader_collection.find_one({"loader_id": params['loader_id']})
+            if not result:
+                rv = {
+                    "ERROR": f"No loader found for loader_id {params['loader_id']}",
+                    "status": "failed"
+                }
+                return jsonify(rv), 409
+            loader_id = params['loader_id']
+            loader_obj = loaderIdvsDocobject[loader_id]
+            loader_status = loader_obj.is_loader_running(db="mysql")
+            if loader_status:
+                rv = {
+                    "response": f"Loader {loader_id} is already running",
+                    "loader_id": loader_id,
+                    "database": params['database_name'],
+                    "table": params['table_name'],
+                    "status": "failed"
+                }
+                return jsonify(rv), 200
+            else:
+                loader_obj.start_running_loader(db="mysql")
+                rv = {
+                    "response": f"Loader {loader_id} restarted successfully",
+                    "loader_id": loader_id,
+                    "database": params['database_name'],
+                    "table": params['table_name'],
+                    "status": "running"
+                }
+                loader_sdk.update_document(loader_collection_name, {"loader_id": loader_id},
+                                           {"status": "running"})
+                return jsonify(rv), 200
+        else:
+            loader_id = str(uuid.uuid4())
+
+            loader_data = {"loader_id": loader_id, "docloader": DocLoader(), "status": "running",
+                           "database": params['database_name'], "collection": params['table_name']}
+
+            mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'], password=params['password'])
+            table_columns = (params['table_columns'])
+            if params['init_config']:
+                mysql_obj = init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
+            else:
+                mysql_obj = MySQLSDK(mysql_config)
+
+            thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mysql,
+                                       args=(mysql_obj, params['table_name'], table_columns, params.get('duration_minutes', float('inf')),
+                                             params.get('max_files_extra', 50), params.get('atleast_min_files', None)))
+            thread1.start()
+
+            loaderIdvsDocobject[loader_id] = loader_data['docloader']
+
+            # since threads would be deleted automatically so removing this field as of now.
+            # We would need this docloader object to stop the loader (update the class field)
+            del loader_data['docloader']
+
+            loader_sdk.insert_single_document(loader_collection_name, loader_data)
+
+            del loader_data['_id']
+            return jsonify(loader_data), 200
+
+    else:
+        return params_check
+
+
+@app.route('/mysql/stop_loader', methods=['POST'])
+def stop_mysql_loader():
+    params = request.json
+    checklist = ["loader_id"]
+    params_check = check_request_body(params, checklist)
+
+    if params_check:
+        loader_id = request.json.get("loader_id")
+
+        loaders = loader_collection.find({})
+        for loader in loaders:
+            if loader_id == loader['loader_id']:
+                if loader['status'] == "running":
+                    loaderIdvsDocobject[loader_id].stop_running_loader(db="mysql")
+                    loader_sdk.update_document(loader_collection_name, {"loader_id": loader['loader_id']},
+                                               {"status": "stopped"})
+                    loader['status'] = "stopped"
+                    rv = {
+                        "response": f"Loader {loader_id} stopped successfully",
+                        "loader_id": loader_id,
+                        "database": loader['database'],
+                        "collection": loader['collection'],
                         "status": loader['status']
                     }
                     return jsonify(rv), 200
