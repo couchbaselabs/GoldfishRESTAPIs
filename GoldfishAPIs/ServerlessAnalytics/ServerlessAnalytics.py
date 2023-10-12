@@ -1,6 +1,8 @@
-import logging
 import json
+import logging
+
 from ..lib.GoldfishRequests import GoldfishRequests
+
 
 class GoldfishAPI(GoldfishRequests):
     """
@@ -14,6 +16,7 @@ class GoldfishAPI(GoldfishRequests):
             pwd (str): The password for authentication.
             TOKEN_FOR_INTERNAL_SUPPORT (str, optional): An optional token for internal support.
     """
+
     def __init__(self, url, secret, access, user, pwd, TOKEN_FOR_INTERNAL_SUPPORT=None):
         super(GoldfishAPI, self).__init__(url, secret, access)
         self.user = user
@@ -54,7 +57,8 @@ class GoldfishAPI(GoldfishRequests):
             resp = self._urllib_request(url, "GET", headers=self.cbc_api_request_headers)
         return resp
 
-    def create_goldfish_instance(self, tenant_id, project_id, name, description, provider, region, nodes, headers=None, **kwargs):
+    def create_goldfish_instance(self, tenant_id, project_id, name, description, provider, region, nodes, headers=None,
+                                 **kwargs):
         """
             Create a new Goldfish instance within a specified project.
 

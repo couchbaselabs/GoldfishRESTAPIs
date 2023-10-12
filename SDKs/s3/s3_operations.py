@@ -1,11 +1,11 @@
-import json
 import csv
+import json
 import pandas as pd
 import random
 import string
+import tempfile
 from faker import Faker
 from fastavro import writer, parse_schema
-import tempfile
 
 
 class s3Operations:
@@ -29,7 +29,6 @@ class s3Operations:
     def create_unique_temporary_file(self, base_name, file_extension):
         unique_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
         _, temp_path = tempfile.mkstemp(prefix=f"{base_name}_{unique_suffix}_", suffix=file_extension)
-        print(temp_path)
         return temp_path
 
     def create_json_file(self, doc_size):

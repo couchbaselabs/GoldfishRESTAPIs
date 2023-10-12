@@ -5,8 +5,8 @@ AWS Access Key ID: "yourAccessKeyId"
 AWS Secret Access Key: "yourAccessKey"
 Default region name : "yourRegionName"
 """
-import logging
 import boto3
+import logging
 from botocore.exceptions import ClientError
 
 
@@ -22,7 +22,7 @@ class DynamoDb:
             self.dyn_resource = boto3.resource('dynamodb', region_name=region)
         else:
             self.dyn_resource = boto3.resource(
-            'dynamodb', endpoint_url=endpoint_url)
+                'dynamodb', endpoint_url=endpoint_url)
         self.table = self.dyn_resource.Table(name=table) if table else None
         self.table_name = table
         self.region = region
@@ -59,7 +59,6 @@ class DynamoDb:
             logging.error("Couldn't create table %s. Here's why: %s: %s", table_name,
                           err.response['Error']['Code'], err.response['Error']['Message'])
             raise
-
 
     def delete_table(self):
         """

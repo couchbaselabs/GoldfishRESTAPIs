@@ -2,24 +2,25 @@
 Docloader to create and upload document to various sources for goldFish
 Sources include mongoDB, dynamoDB, cassandra, etc..
 """
-import json
 import concurrent
 import concurrent.futures
-import time
-import logging
 import faker
+import json
+import logging
+import os
 import random
 import string
+import time
 from concurrent.futures import ThreadPoolExecutor
+
 import Docloader.docgen_template as template
 import SDKs.DynamoDB.dynamo_sdk as dynamoSdk
-from SDKs.MongoDB.MongoSDK import MongoSDK
 from SDKs.MongoDB.MongoConfig import MongoConfig
+from SDKs.MongoDB.MongoSDK import MongoSDK
+from SDKs.MySQL.MySqlSDK import MySQLSDK
 from SDKs.s3.s3_SDK import s3SDK
 from SDKs.s3.s3_config import s3Config
 from SDKs.s3.s3_operations import s3Operations
-from SDKs.MySQL.MySqlSDK import MySQLSDK
-import os
 
 
 class DocLoader:
@@ -55,6 +56,69 @@ class DocLoader:
         else:
             return obj
 
+    def calculate_optimal_batch_size(self, target_docs, current_docs, max_batch_size, upper_factor=0.1,
+                                     lower_factor=0.01):
+        """
+            Calculate the optimal batch size for CRUD operations based on the current and target number of documents.
+
+            Parameters:
+            - target_docs (int): The target number of documents to be inserted or updated.
+            - current_docs (int): The current number of documents in the collection.
+            - max_batch_size (int): The maximum allowed batch size for the operations.
+            - upper_factor (float): The upper factor to adjust the batch size. Default is 0.1 (10% increase).
+            - lower_factor (float): The lower factor to adjust the batch size. Default is 0.01 (1% decrease).
+
+            Returns:
+            - int: The calculated optimal batch size.
+        """
+        doc_difference = target_docs - current_docs
+        initial_batch_size = int(doc_difference * upper_factor)
+        initial_batch_size = min(max_batch_size, max(1, initial_batch_size))
+        if initial_batch_size < doc_difference * lower_factor:
+            initial_batch_size = int(doc_difference * lower_factor)
+        return min(max_batch_size, max(1, initial_batch_size))
+
+    def is_loader_running(self, db):
+        """
+           Check if the loader is currently running.
+
+           Returns:
+               bool: True if the loader is running, False otherwise.
+       """
+        if db == "mongo":
+            return not self.stop_mongo_loader
+        elif db == "s3":
+            return not self.stop_s3_loader
+        elif db == "mysql":
+            return not self.stop_mysql_loader
+
+    def stop_running_loader(self, db):
+        """
+             Stop the currently running loader.
+
+             This method sets the `stop_loader` flag to True, indicating the loader to stop its operation.
+         """
+        if db == "mongo":
+            self.stop_mongo_loader = True
+        elif db == "s3":
+            self.stop_s3_loader = True
+        elif db == "mysql":
+            self.stop_mysql_loader = True
+
+    def start_running_loader(self, db):
+        """
+            Start the loader.
+
+            This method sets the `stop_loader` flag to False, allowing the loader to
+            continue or start its operation.
+        """
+        if db == "mongo":
+            self.stop_mongo_loader = False
+        elif db == "s3":
+            self.stop_s3_loader = False
+        elif db == "mysql":
+            self.stop_mysql_loader = False
+
     def generate_docs(self, index=None):
         """
         Generates a single document
@@ -86,6 +150,7 @@ class DocLoader:
                     print(f"An error occurred: {err}")
         return documents
 
+    # -- DYNAMODB --
     def load_doc_to_dynamo(self, url=None, table=None, region_name=None, batch_size=1000, max_concurrent_batches=1000):
         """
 
@@ -159,6 +224,7 @@ class DocLoader:
         dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region=region_name)
         dynamo_obj.update_item(item_key, changed_object_json)
 
+    # -- MONGODB --
     def load_doc_to_mongo(self, mongoConfig, collection_name, num_docs, batch_size):
         """
             Insert documents into the MongoDB collection.
@@ -238,28 +304,6 @@ class DocLoader:
         random_document = mongo_obj.get_random_doc(collection_name)
         mongo_obj.delete_document(collection_name, {"_id": random_document["_id"]})
 
-    def calculate_optimal_batch_size(self, target_docs, current_docs, max_batch_size, upper_factor=0.1,
-                                     lower_factor=0.01):
-        """
-            Calculate the optimal batch size for CRUD operations based on the current and target number of documents.
-
-            Parameters:
-            - target_docs (int): The target number of documents to be inserted or updated.
-            - current_docs (int): The current number of documents in the collection.
-            - max_batch_size (int): The maximum allowed batch size for the operations.
-            - upper_factor (float): The upper factor to adjust the batch size. Default is 0.1 (10% increase).
-            - lower_factor (float): The lower factor to adjust the batch size. Default is 0.01 (1% decrease).
-
-            Returns:
-            - int: The calculated optimal batch size.
-        """
-        doc_difference = target_docs - current_docs
-        initial_batch_size = int(doc_difference * upper_factor)
-        initial_batch_size = min(max_batch_size, max(1, initial_batch_size))
-        if initial_batch_size < doc_difference * lower_factor:
-            initial_batch_size = int(doc_difference * lower_factor)
-        return min(max_batch_size, max(1, initial_batch_size))
-
     def perform_crud_on_mongo(self, mongo_config, collection_name, target_num_docs, time_for_crud_in_mins=None,
                               num_buffer=500):
         """
@@ -282,81 +326,60 @@ class DocLoader:
             start_time = time.time()
             time_for_crud = time.time() - start_time < time_for_crud_in_mins * 60
 
-        while not self.stop_loader and time_for_crud:
+        initial_load = True
+        while True:
+            while not self.stop_mongo_loader and time_for_crud:
 
-            operation = random.choice(["update", "insert", "delete"])
-            # Perform a random operation based on the selected type
-            if operation == "update":
-                self.perform_random_update(mongo_config, collection_name)
-            elif operation == "insert":
-                mongo_object.insert_single_document(collection_name, self.generate_docs())
-            elif operation == "delete":
-                self.delete_random_doc(mongo_config, collection_name)
-
-            current_docs = mongo_object.get_current_doc_count(collection_name)
-
-            if target_num_docs > num_buffer and current_docs < target_num_docs - num_buffer:
-                while current_docs < target_num_docs:
-                    batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
-                    self.load_doc_to_mongo(mongo_config, collection_name, target_num_docs - current_docs, batch_size)
-                    current_docs = mongo_object.get_current_doc_count(collection_name)
-
-            elif current_docs > target_num_docs + num_buffer:
-                while current_docs > target_num_docs:
-                    self.delete_random_doc(mongo_object, collection_name)
-                    current_docs = mongo_object.get_current_doc_count(collection_name)
-
-        if not self.stop_loader:
-            current_docs = mongo_object.get_current_doc_count(collection_name)
-            while current_docs < target_num_docs:
-                batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
-                print(current_docs, target_num_docs, batch_size)
-                self.load_doc_to_mongo(mongo_config, collection_name, target_num_docs - current_docs, batch_size)
-                current_docs = mongo_object.get_current_doc_count(collection_name)
-            while current_docs > target_num_docs:
-                self.delete_random_doc(mongo_object, collection_name)
                 current_docs = mongo_object.get_current_doc_count(collection_name)
 
-    def is_loader_running(self, db):
+                operation = random.choice(["update", "insert", "delete"])
+                # Perform a random operation based on the selected type
+                if operation == "update":
+                    self.perform_random_update(mongo_config, collection_name)
+                elif operation == "insert" and current_docs < target_num_docs + num_buffer:
+                    mongo_object.insert_single_document(collection_name, self.generate_docs())
+                elif operation == "delete" and current_docs > target_num_docs - num_buffer:
+                    self.delete_random_doc(mongo_config, collection_name)
+
+                if initial_load:
+                    while (not self.stop_mongo_loader) and current_docs < target_num_docs:
+                        batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
+                        self.load_doc_to_mongo(mongo_config, collection_name, target_num_docs - current_docs,
+                                               batch_size)
+                        current_docs = mongo_object.get_current_doc_count(collection_name)
+
+                    while (not self.stop_mongo_loader) and current_docs > target_num_docs:
+                        self.delete_random_doc(mongo_object, collection_name)
+                        current_docs = mongo_object.get_current_doc_count(collection_name)
+                    initial_load = False
+
+    def rebalance_mongo_docs(self, mongo_config, collection_name, num_docs):
+        mongo_object = MongoSDK(mongo_config)
+        current_docs = mongo_object.get_current_doc_count(collection_name)
+        while current_docs < num_docs:
+            batch_size = self.calculate_optimal_batch_size(num_docs, current_docs, 10000)
+            self.load_doc_to_mongo(mongo_config, collection_name, num_docs - current_docs, batch_size)
+            current_docs = mongo_object.get_current_doc_count(collection_name)
+        while current_docs > num_docs:
+            self.delete_random_doc(mongo_object, collection_name)
+            current_docs = mongo_object.get_current_doc_count(collection_name)
+
+    # -- S3 --
+    def generate_random_folder_path(self, num_folders, depth_lvl):
         """
-           Check if the loader is currently running.
+        Generate a random folder path based on the specified number of folders and depth level.
 
-           Returns:
-               bool: True if the loader is running, False otherwise.
-       """
-        if db == "mongo":
-            return not self.stop_mongo_loader
-        elif db == "s3":
-            return not self.stop_s3_loader
-        elif db == "mysql":
-            return not self.stop_mysql_loader
+        Parameters:
+        - num_folders (int): Number of folders per level.
+        - depth_lvl (int): Depth level.
 
-    def stop_running_loader(self, db):
+        Returns:
+        - str: Random folder path.
         """
-             Stop the currently running loader.
-
-             This method sets the `stop_loader` flag to True, indicating the loader to stop its operation.
-         """
-        if db == "mongo":
-            self.stop_mongo_loader = True
-        elif db == "s3":
-            self.stop_s3_loader = True
-        elif db == "mysql":
-            self.stop_mysql_loader = True
-
-    def start_running_loader(self, db):
-        """
-            Start the loader.
-
-            This method sets the `stop_loader` flag to False, allowing the loader to
-            continue or start its operation.
-        """
-        if db == "mongo":
-            self.stop_mongo_loader = False
-        elif db == "s3":
-            self.stop_s3_loader = False
-        elif db == "mysql":
-            self.stop_mysql_loader = False
+        folder_path = ""
+        for level in range(depth_lvl + 1):
+            folder_path += f'Depth_{level}_Folder_{random.randint(0, num_folders - 1)}/'
+        return folder_path
 
     def create_s3_using_specified_config(self, s3_config, skip_bucket=False, bucket=[]):
         """
@@ -413,7 +436,7 @@ class DocLoader:
             futures = []
             for bucket in buckets:
                 futures.append(
-                    executor.submit(self.crud_for_bucket, config, s3, s3_config, bucket, max_files, min_files,
+                    executor.submit(self.crud_for_s3_bucket, config, s3, s3_config, bucket, max_files, min_files,
                                     duration_minutes))
 
             # Wait for all tasks to complete
@@ -422,63 +445,47 @@ class DocLoader:
 
         print("All CRUD operations completed.")
 
-    def crud_for_bucket(self, config, s3, s3_config, bucket, max_files, min_files, duration_minutes):
+    def crud_for_s3_bucket(self, config, s3, s3_config, bucket, max_files, min_files, duration_minutes):
         self.print_s3_bucket_structure(s3, bucket)
         start_time = time.time()
-        while not self.stop_s3_loader and time.time() - start_time < duration_minutes * 60:
-            # Generate a random depth and folder path
-            depth_lvl = random.randint(0, config.depth_level - 1)
-            folder_path = self.generate_random_folder_path(config.num_folders_per_level, depth_lvl)
+        print_bucket_struct = True
+        while True:
+            if not self.stop_s3_loader:
+                print_bucket_struct = True
+            while not self.stop_s3_loader and time.time() - start_time < duration_minutes * 60:
+                # Generate a random depth and folder path
+                depth_lvl = random.randint(0, config.depth_level - 1)
+                folder_path = self.generate_random_folder_path(config.num_folders_per_level, depth_lvl)
 
-            # Check the total number of files in the folder
-            existing_files = s3.list_files_in_folder(bucket, folder_path)
+                # Check the total number of files in the folder
+                existing_files = s3.list_files_in_folder(bucket, folder_path)
 
-            # Randomly choose insert or delete operation
-            operation = random.choice(["insert", "delete"])
-            # Perform insert operation if there are fewer files than the target and insert operation is chosen
-            if len(existing_files) < max_files and operation == "insert":
-                file_name = f"{random.randint(0, 100)}.{random.choice(config.file_format)}"
-                file_content = s3_config.create_file_with_required_file_type(random.choice(config.file_format),
-                                                                             config.file_size)
-                s3_object_key = os.path.join(folder_path, file_name)
-                print(f"inserting file {file_name} on path {s3_object_key}")
-                s3.upload_file_with_content(bucket, s3_object_key, file_content)
-            # Perform delete operation if there are more files than the target and delete operation is chosen
-            elif len(existing_files) > min_files and operation == "delete":
-                # Choose a random file from existing_files
-                file_path_in_folder = random.choice(existing_files)
+                # Randomly choose insert or delete operation
+                operation = random.choice(["insert", "delete"])
+                # Perform insert operation if there are fewer files than the target and insert operation is chosen
+                if len(existing_files) < max_files and operation == "insert":
+                    file_name = f"{random.randint(0, 100)}.{random.choice(config.file_format)}"
+                    file_content = s3_config.create_file_with_required_file_type(random.choice(config.file_format),
+                                                                                 config.file_size)
+                    s3_object_key = os.path.join(folder_path, file_name)
+                    print(f"inserting file {file_name} on path {s3_object_key}")
+                    s3.upload_file_with_content(bucket, s3_object_key, file_content)
+                # Perform delete operation if there are more files than the target and delete operation is chosen
+                elif len(existing_files) > min_files and operation == "delete":
+                    # Choose a random file from existing_files
+                    file_path_in_folder = random.choice(existing_files)
 
-                # Extract the file name from the full path
-                file_name = os.path.basename(file_path_in_folder)
+                    # Extract the file name from the full path
+                    file_name = os.path.basename(file_path_in_folder)
 
-                # Construct the S3 object key
-                s3_object_key = os.path.join(folder_path, file_name)
+                    # Construct the S3 object key
+                    s3_object_key = os.path.join(folder_path, file_name)
 
-                print(f"deleting file {file_name} on path {s3_object_key}")
-                s3.delete_file(bucket, s3_object_key)
-
-        print("Crud complete")
-        self.print_s3_bucket_structure(s3, bucket)
-
-        self.rebalance_s3(s3, bucket, config)
-
-        self.print_s3_bucket_structure(s3, bucket)
-
-    def generate_random_folder_path(self, num_folders, depth_lvl):
-        """
-        Generate a random folder path based on the specified number of folders and depth level.
-
-        Parameters:
-        - num_folders (int): Number of folders per level.
-        - depth_lvl (int): Depth level.
-
-        Returns:
-        - str: Random folder path.
-        """
-        folder_path = ""
-        for level in range(depth_lvl + 1):
-            folder_path += f'Depth_{level}_Folder_{random.randint(0, num_folders - 1)}/'
-        return folder_path
+                    print(f"deleting file {file_name} on path {s3_object_key}")
+                    s3.delete_file(bucket, s3_object_key)
+            if print_bucket_struct:
+                self.print_s3_bucket_structure(s3, bucket)
+                print_bucket_struct = True
 
     def rebalance_s3(self, s3, bucket, config):
         s3.empty_bucket(bucket)
@@ -487,6 +494,7 @@ class DocLoader:
     def print_s3_bucket_structure(self, s3, bucket):
         s3.print_bucket_structure(bucket)
 
+    # -- MYSQL --
     def load_data_to_mysql(self, mysql_obj, table_name, table_columns, doc_count, record_values=None):
         for _ in range(doc_count):
             table_columns_without_id = [col.split()[0] for col in table_columns.split(", ") if
@@ -521,7 +529,7 @@ class DocLoader:
             if atleast_min_files is None:
                 atleast_min_files = min(0, start_count - 50)
 
-            while not self.stop_mysql_loader and time.time() - start_time < duration_minutes * 60:
+            while (not self.stop_mysql_loader) and time.time() - start_time < duration_minutes * 60:
                 print(self.stop_mysql_loader)
                 operation = random.choice(["create", "update", "delete"])
                 print(operation)
@@ -551,17 +559,13 @@ class DocLoader:
                     mysql_obj.insert_record_using_columns(table_name, table_columns_without_id, record_values)
 
                 elif operation == "update":
-                    # # Update record
                     record_id = mysql_obj.get_random_record_id(table_name)
                     if record_id is not None:
-                        # Generate a new set of document values
                         doc = self.generate_docs()
 
-                        # Convert lists and dictionaries to JSON strings
                         public_likes_json = json.dumps(doc["public_likes"])
                         reviews_json = json.dumps(doc["reviews"])
 
-                        # Define the update values with the converted JSON strings
                         update_values = {
                             "address": doc["address"],
                             "avg_rating": doc["avg_ratings"],
@@ -583,7 +587,6 @@ class DocLoader:
 
                         update_values_list = tuple(update_values.values())
 
-                        # Execute the update query
                         try:
                             mysql_obj.update_using_given_query_and_value(update_query, update_values_list)
                             print(f"Record with ID {record_id} updated successfully.")
@@ -592,9 +595,7 @@ class DocLoader:
                     else:
                         print("No records found in the table.")
 
-                # print(start_count - atleast_min_files, current_records_count)
                 elif operation == "delete" and start_count - atleast_min_files < current_records_count:
-                    print("inside here")
                     record_id = mysql_obj.get_random_record_id(table_name)
 
                     if record_id is not None:
@@ -603,8 +604,8 @@ class DocLoader:
                         except Exception as e:
                             print(f"Error during delete operation: {e}")
 
-
-    def rebalance_mysql_docs(self, doc_count, table_name, table_columns, mysql_obj=None, config=None, database_name=None):
+    def rebalance_mysql_docs(self, doc_count, table_name, table_columns, mysql_obj=None, config=None,
+                             database_name=None, record_values=None):
         if not mysql_obj:
             if config is None or database_name is None:
                 raise Exception("MySQL config and Database name is required")
@@ -627,21 +628,23 @@ class DocLoader:
 
             table_columns_without_id = [col.split()[0] for col in table_columns.split(", ") if
                                         "AUTO_INCREMENT" not in col]
-            record_values = [
-                doc["address"],
-                doc["avg_ratings"],
-                doc["city"],
-                doc["country"],
-                doc["email"],
-                doc["free_breakfast"],
-                doc["free_parking"],
-                doc["name"],
-                doc["phone"],
-                doc["price"],
-                json.dumps(doc["public_likes"]),
-                json.dumps(doc["reviews"]),
-                doc["type"],
-                doc["url"],
-            ]
+
+            if not record_values:
+                record_values = [
+                    doc["address"],
+                    doc["avg_ratings"],
+                    doc["city"],
+                    doc["country"],
+                    doc["email"],
+                    doc["free_breakfast"],
+                    doc["free_parking"],
+                    doc["name"],
+                    doc["phone"],
+                    doc["price"],
+                    json.dumps(doc["public_likes"]),
+                    json.dumps(doc["reviews"]),
+                    doc["type"],
+                    doc["url"],
+                ]
             mysql_obj.insert_record_using_columns(table_name, table_columns_without_id, record_values)
             current_records_count += 1

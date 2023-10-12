@@ -1,7 +1,9 @@
-from threading import Lock
-import requests
+import base64
+import json
 import logging
 import pprint
+import requests
+from threading import Lock
 
 from .GoldfishAuth import GoldfishAuth
 from .GoldfishExceptions import (
@@ -10,8 +12,7 @@ from .GoldfishExceptions import (
     GenericHTTPError,
     CbcAPIError
 )
-import base64
-import json
+
 
 class GoldfishRequests(object):
     """
@@ -26,6 +27,7 @@ class GoldfishRequests(object):
             access (str, optional): The access key for authentication. Default is None.
             token (str, optional): The API token for authentication. Default is None.
     """
+
     def __init__(self, url, secret=None, access=None, token=None):
         # handles http requests - GET , PUT, POST, DELETE
         # Read the values from the environmental variables
@@ -66,8 +68,8 @@ class GoldfishRequests(object):
                 self.jwt = json.loads(resp.content).get("jwt")
             self.lock.release()
         cbc_api_request_headers = {
-           'Authorization': 'Bearer %s' % self.jwt,
-           'Content-Type': 'application/json'
+            'Authorization': 'Bearer %s' % self.jwt,
+            'Content-Type': 'application/json'
         }
         return cbc_api_request_headers
 

@@ -1,7 +1,8 @@
+import logging
 import mysql.connector
 from mysql.connector import Error
+
 from SDKs.MySQL.MySQL_config import MySQLConfig
-import logging
 
 
 class MySQLSDK:

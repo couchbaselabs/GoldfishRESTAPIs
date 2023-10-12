@@ -1,6 +1,7 @@
 class s3Config:
     def __init__(self, access_key, secret_key, region, num_buckets, depth_level, num_folders_per_level,
-                 num_files_per_level, session_token=None, file_size=1024, max_file_size=10240, file_format=['json', 'csv', 'tsv']):
+                 num_files_per_level, session_token=None, file_size=1024, max_file_size=10240,
+                 file_format=['json', 'csv', 'tsv']):
         self.access_key = access_key
         self.secret_key = secret_key
         self.region = region

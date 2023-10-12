@@ -1,6 +1,8 @@
-from pymongo import MongoClient
-from .MongoConfig import MongoConfig
 import logging
+from pymongo import MongoClient
+
+from .MongoConfig import MongoConfig
+
 
 class MongoSDK(MongoConfig):
     """
@@ -42,14 +44,15 @@ class MongoSDK(MongoConfig):
         self.db = self.client[self.database_name]
 
         self.log = logging.getLogger(__name__)
-        self.log.setLevel(logging.INFO)  # Set the logging level to INFO
-
-        # Create a handler to control where the log messages go (e.g., console or file)
-        handler = logging.StreamHandler()  # Log to console
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-        self.log.addHandler(handler)
+        self.log.setLevel(logging.INFO)
+        if not self.log.handlers:
+            # Create a handler to control where the log messages go (e.g., console or file)
+            handler = logging.StreamHandler()  # Log to console
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.log.addHandler(handler)
+            self.log.propagate = False
 
     def close_mongoDB_connection(self):
         """
@@ -69,7 +72,9 @@ class MongoSDK(MongoConfig):
                 pymongo.results.InsertOneResult: The result of the insertion operation.
         """
         collection = self.db[collection_name]
-        return collection.insert_one(data)
+        insert = collection.insert_one(data)
+        self.log.info("Insertion result : Inserted data successfully")
+        return insert
 
     def insert_multiple_document(self, collection_name, data_to_insert):
         """
@@ -117,5 +122,5 @@ class MongoSDK(MongoConfig):
         return collection.count_documents({})
 
     def get_random_doc(self, collection_name):
-        collection =self.db[collection_name]
+        collection = self.db[collection_name]
         return collection.find_one({})

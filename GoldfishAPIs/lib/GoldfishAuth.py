@@ -1,14 +1,16 @@
 import base64
-import hmac
 import hashlib
-from requests.auth import AuthBase
+import hmac
 import time
+from requests.auth import AuthBase
+
 
 class GoldfishAuth(AuthBase):
     """
         Extends requests AuthBase for
         Couchbase Cloud API Authentication Handler.
     """
+
     def __init__(self, secret, access, token):
         """
             Create an authentication handler for Couchbase Cloud APIs

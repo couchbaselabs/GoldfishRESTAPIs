@@ -1,15 +1,17 @@
+import threading
+import uuid
 from flask import Flask, request, jsonify
+
 from Docloader.doc_loader import DocLoader
 from SDKs.MongoDB.MongoConfig import MongoConfig
 from SDKs.MongoDB.MongoSDK import MongoSDK
-from SDKs.s3.s3_config import s3Config
-from SDKs.MySQL.MySqlSDK import MySQLSDK
 from SDKs.MySQL.MySQL_config import MySQLConfig
-import uuid
-import threading
+from SDKs.MySQL.MySqlSDK import MySQLSDK
+from SDKs.s3.s3_config import s3Config
 
 app = Flask(__name__)
 
+# These are the details of DB in which all loader Data is stored
 loader_config = MongoConfig("172.23.105.114", 27017, "", "", "loaderDB")
 loader_sdk = MongoSDK(loader_config)
 loader_collection_name = str("loaderCollection")
@@ -34,12 +36,12 @@ def check_request_body(params, checklist):
 def start_mongo_loader():
     params = request.json
     checklist = ["ip", "port", "username", "password", "database_name", "collection_name",
-                 "target_num_docs",
-                 "time_for_crud_in_mins", "num_buffer"]
+                 "target_num_docs"]
 
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
         loaders = loader_collection.find({})
+
         # check if there is a loader already running on same db and collection
         for loader in loaders:
             if loader['database'] == params['database_name'] and loader['collection'] == params['collection_name'] and \
@@ -53,6 +55,7 @@ def start_mongo_loader():
                 }
                 return jsonify(rv), 409
 
+        # Run a loader whose loader ID is known
         if "loader_id" in params:
             result = loader_collection.find_one({"loader_id": params['loader_id']})
             if not result:
@@ -86,6 +89,7 @@ def start_mongo_loader():
                                            {"status": "running"})
                 return jsonify(rv), 200
         else:
+            # Start a new loader
             loader_id = str(uuid.uuid4())
 
             loader_data = {"loader_id": loader_id, "docloader": DocLoader(), "status": "running",
@@ -95,7 +99,8 @@ def start_mongo_loader():
                                        params['database_name'])
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mongo,
                                        args=(mongo_config, params['collection_name'], params['target_num_docs'],
-                                             params['time_for_crud_in_mins'], params['num_buffer']))
+                                             params.get('time_for_crud_in_mins', float('inf')),
+                                             params.get('num_buffer', 500)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']
@@ -259,6 +264,7 @@ def stop_s3_loader():
     else:
         return params_check
 
+
 def init_mysql_setup(config, database_name, table_columns, table_name):
     mysql = MySQLSDK(config)
     mysql.create_connection()
@@ -266,6 +272,7 @@ def init_mysql_setup(config, database_name, table_columns, table_name):
     mysql.use_database(database_name)
     mysql.create_table(table_name, table_columns)
     return mysql
+
 
 @app.route('/mysql/start_loader', methods=['POST'])
 def start_mysql_loader():
@@ -327,7 +334,8 @@ def start_mysql_loader():
             loader_data = {"loader_id": loader_id, "docloader": DocLoader(), "status": "running",
                            "database": params['database_name'], "collection": params['table_name']}
 
-            mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'], password=params['password'])
+            mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
+                                       password=params['password'])
             table_columns = (params['table_columns'])
             if params['init_config']:
                 mysql_obj = init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
@@ -335,7 +343,8 @@ def start_mysql_loader():
                 mysql_obj = MySQLSDK(mysql_config)
 
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mysql,
-                                       args=(mysql_obj, params['table_name'], table_columns, params.get('duration_minutes', float('inf')),
+                                       args=(mysql_obj, params['table_name'], table_columns,
+                                             params.get('duration_minutes', float('inf')),
                                              params.get('max_files_extra', 50), params.get('atleast_min_files', None)))
             thread1.start()
 

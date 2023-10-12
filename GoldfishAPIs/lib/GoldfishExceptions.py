@@ -1,5 +1,6 @@
-import sys
 import inspect
+import sys
+
 
 class CbcAPIError(Exception):
     """
@@ -14,6 +15,7 @@ class CbcAPIError(Exception):
             ln = inspect.currentframe().f_back.f_lineno
         self.args = "{0.__name__} : {1}".format(type(self), msg),
         sys.exit(self)
+
 
 class MissingAccessKeyError(CbcAPIError):
     # Raised when there is a problem with the environmental variable that defines the access key for the Public API

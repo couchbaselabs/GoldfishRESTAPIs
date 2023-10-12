@@ -1,13 +1,13 @@
-import time
-
 import boto3
-from botocore.exceptions import ClientError
-from boto3.s3.transfer import TransferConfig
-from SDKs.s3.s3_operations import s3Operations
+import concurrent.futures
 import logging
 import os
+import time
+from boto3.s3.transfer import TransferConfig
+from botocore.exceptions import ClientError
 from prettytable import PrettyTable
-import concurrent.futures
+
+from SDKs.s3.s3_operations import s3Operations
 
 
 class s3SDK:

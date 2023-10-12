@@ -1,12 +1,13 @@
+import uuid
 from cassandra.cluster import Cluster
 from cassandra.query import BatchStatement
-import uuid
 
 
 class CassandraSDK:
     """
     Cassandra sdk to handle cassandra entities
     """
+
     def __init__(self, contact_points, keyspace, table_name):
         self.cluster = Cluster(contact_points)
         self.session = self.cluster.connect(keyspace)
