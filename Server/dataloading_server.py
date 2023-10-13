@@ -261,7 +261,6 @@ def start_s3_loader():
                     "response": f"Loader {loader_id} restarted successfully",
                     "loader_id": loader_id,
                     "bucket": result['database'],
-                    "collection": result['database'],
                     "status": "running"
                 }
                 loader_sdk.update_document(loader_collection_name, {"loader_id": loader_id},
