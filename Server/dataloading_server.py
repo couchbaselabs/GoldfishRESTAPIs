@@ -7,8 +7,8 @@ from SDKs.MongoDB.MongoConfig import MongoConfig
 from SDKs.MongoDB.MongoSDK import MongoSDK
 from SDKs.MySQL.MySQL_config import MySQLConfig
 from SDKs.MySQL.MySqlSDK import MySQLSDK
-from SDKs.s3.s3_config import s3Config
 from SDKs.s3.s3_SDK import s3SDK
+from SDKs.s3.s3_config import s3Config
 
 app = Flask(__name__)
 
@@ -340,6 +340,7 @@ def stop_s3_loader():
     else:
         return params_check
 
+
 @app.route('/s3/delete_bucket', methods=['DELETE'])
 def drop_s3_bucket():
     params = request.json
@@ -362,6 +363,7 @@ def drop_s3_bucket():
 
     else:
         return params_check
+
 
 def init_mysql_setup(config, database_name, table_columns, table_name):
     mysql = MySQLSDK(config)
@@ -508,6 +510,57 @@ def get_docs_in_mysql():
             count = mysql_sdk.get_total_records_count(params['table_name'])
             rv = {
                 "count": count
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "error": str(e)
+            }
+            return jsonify(rv), 200
+
+    else:
+        return params_check
+
+
+@app.route('/mysql/delete_database', methods=['DELETE'])
+def delete_mysql_database():
+    params = request.json
+    checklist = ["host", "port", "username", "password", "database_name"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
+                                   password=params['password'])
+        mysql_sdk = MySQLSDK(mysql_config)
+        try:
+            mysql_sdk.use_database(params['database_name'])
+            mysql_sdk.delete_database(params["database_name"])
+            rv = {
+                "response": "SUCCESS"
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "error": str(e)
+            }
+            return jsonify(rv), 200
+    else:
+        return params_check
+
+
+@app.route('/mysql/delete_table', methods=['DELETE'])
+def delete_mysql_table():
+    params = request.json
+    checklist = ["host", "port", "username", "password", "database_name", "table_name"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
+                                   password=params['password'])
+        mysql_sdk = MySQLSDK(mysql_config)
+        try:
+            mysql_sdk.use_database(params['database_name'])
+            mysql_sdk.delete_table(params["table_name"])
+            rv = {
+                "response": "SUCCESS"
             }
             return jsonify(rv), 200
         except Exception as e:

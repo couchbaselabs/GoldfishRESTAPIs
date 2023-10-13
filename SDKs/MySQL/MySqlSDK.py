@@ -19,14 +19,15 @@ class MySQLSDK:
         self.connection = None
         self.cursor = None
         self.log = logging.getLogger(__name__)
-        self.log.setLevel(logging.INFO)  # Set the logging level to INFO
-
-        # Create a handler to control where the log messages go (e.g., console or file)
-        handler = logging.StreamHandler()  # Log to console
-        formatter = logging.Formatter(
-            '%(asctime)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-        self.log.addHandler(handler)
+        self.log.setLevel(logging.INFO)
+        if not self.log.handlers:
+            # Create a handler to control where the log messages go (e.g., console or file)
+            handler = logging.StreamHandler()  # Log to console
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.log.addHandler(handler)
+            self.log.propagate = False
         self.create_connection()
 
     def create_connection(self):
@@ -59,12 +60,29 @@ class MySQLSDK:
 
     def create_table(self, table_name, columns):
         try:
-            # columns should be a string defining the columns and their types, e.g., "id INT PRIMARY KEY, name VARCHAR(255)"
             create_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({columns})"
             self.log.info(f"Executing query : {create_table_query}")
             self.cursor.execute(create_table_query)
         except mysql.connector.Error as err:
             self.log.error(f"Error during table creation: {err}")
+            raise Exception(err)
+
+    def delete_database(self, db_name):
+        try:
+            delete_database_query = f"DROP DATABASE IF EXISTS {db_name}"
+            self.log.info(f"Executing query : {delete_database_query}")
+            self.cursor.execute(delete_database_query)
+        except mysql.connector.Error as err:
+            self.log.error(f"Error during database deletion: {err}")
+            raise Exception(err)
+
+    def delete_table(self, table_name):
+        try:
+            delete_table_query = f"DROP TABLE IF EXISTS {table_name}"
+            self.log.info(f"Executing query : {delete_table_query}")
+            self.cursor.execute(delete_table_query)
+        except mysql.connector.Error as err:
+            self.log.error(f"Error during table deletion: {err}")
             raise Exception(err)
 
     def insert_record(self, table_name, values):
