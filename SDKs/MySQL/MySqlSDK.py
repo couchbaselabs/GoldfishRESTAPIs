@@ -27,6 +27,7 @@ class MySQLSDK:
             '%(asctime)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         self.log.addHandler(handler)
+        self.create_connection()
 
     def create_connection(self):
         try:

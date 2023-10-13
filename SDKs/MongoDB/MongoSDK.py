@@ -60,6 +60,12 @@ class MongoSDK(MongoConfig):
         """
         self.client.close()
 
+    def drop_database(self, database_name):
+        self.client.drop_database(database_name)
+
+    def drop_collection(self, database_name, collection_name):
+        self.client[database_name][collection_name].drop()
+
     def insert_single_document(self, collection_name, data):
         """
             Insert a single document into the specified collection.

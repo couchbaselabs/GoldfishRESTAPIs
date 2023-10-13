@@ -8,6 +8,7 @@ from SDKs.MongoDB.MongoSDK import MongoSDK
 from SDKs.MySQL.MySQL_config import MySQLConfig
 from SDKs.MySQL.MySqlSDK import MySQLSDK
 from SDKs.s3.s3_config import s3Config
+from SDKs.s3.s3_SDK import s3SDK
 
 app = Flask(__name__)
 
@@ -151,6 +152,81 @@ def stop_mongo_loader():
         return params_check
 
 
+@app.route('/mongo/count', methods=['GET'])
+def get_docs_in_mongo():
+    params = request.json
+    checklist = ["ip", "port", "username", "password", "database_name", "collection_name"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
+                                   params['database_name'])
+        mongo_sdk = MongoSDK(mongo_config)
+        try:
+            count = mongo_sdk.get_current_doc_count(params['collection_name'])
+            rv = {
+                "count": count
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "error": str(e)
+            }
+            return jsonify(rv), 200
+
+    else:
+        return params_check
+
+
+@app.route('/mongo/delete_database', methods=['DELETE'])
+def drop_mongo_database():
+    params = request.json
+    checklist = ["ip", "port", "username", "password", "database_name"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
+                                   params['database_name'])
+        mongo_sdk = MongoSDK(mongo_config)
+        try:
+            mongo_sdk.drop_database(params['database_name'])
+            rv = {
+                "response": "SUCCESS"
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "Error": str(e)
+            }
+            return jsonify(rv), 200
+
+    else:
+        return params_check
+
+
+@app.route('/mongo/delete_collection', methods=['DELETE'])
+def drop_mongo_collection():
+    params = request.json
+    checklist = ["ip", "port", "username", "password", "database_name", "collection_name"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
+                                   params['database_name'])
+        mongo_sdk = MongoSDK(mongo_config)
+        try:
+            mongo_sdk.drop_collection(params['database_name'], params['collection_name'])
+            rv = {
+                "response": "SUCCESS"
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "error": str(e)
+            }
+            return jsonify(rv), 200
+
+    else:
+        return params_check
+
+
 @app.route('/s3/start_loader', methods=['POST'])
 def start_s3_loader():
     params = request.json
@@ -264,10 +340,31 @@ def stop_s3_loader():
     else:
         return params_check
 
+@app.route('/s3/delete_bucket', methods=['DELETE'])
+def drop_s3_bucket():
+    params = request.json
+    checklist = ["access_key", "secret_key", "bucket_name"]
+
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        s3_sdk = s3SDK(params['access_key'], params['secret_key'], params.get('session_token', None))
+        try:
+            s3_sdk.delete_bucket(params['bucket_name'])
+            rv = {
+                "response": "SUCCESS"
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "error": str(e)
+            }
+            return jsonify(rv), 200
+
+    else:
+        return params_check
 
 def init_mysql_setup(config, database_name, table_columns, table_name):
     mysql = MySQLSDK(config)
-    mysql.create_connection()
     mysql.create_database(database_name)
     mysql.use_database(database_name)
     mysql.create_table(table_name, table_columns)
@@ -392,6 +489,33 @@ def stop_mysql_loader():
                     return jsonify({"response": f"Loader {loader_id} is not running"}), 200
 
         return jsonify({"response": f"No loader found with ID {loader_id}"}), 200
+    else:
+        return params_check
+
+
+@app.route('/mysql/count', methods=['GET'])
+def get_docs_in_mysql():
+    params = request.json
+    checklist = ["host", "port", "username", "password", "database_name", "table_name"]
+
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
+                                   password=params['password'])
+        mysql_sdk = MySQLSDK(mysql_config)
+        try:
+            mysql_sdk.use_database(params['database_name'])
+            count = mysql_sdk.get_total_records_count(params['table_name'])
+            rv = {
+                "count": count
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "error": str(e)
+            }
+            return jsonify(rv), 200
+
     else:
         return params_check
 
