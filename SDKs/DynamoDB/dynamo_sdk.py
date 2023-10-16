@@ -73,8 +73,8 @@ class DynamoDb:
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
 
-    def delete_item(self, item_key=None, condition_expression=None,
-                    expression_attribute_values=None, **params):
+    def delete_item(self, item_key, condition_expression=None,
+                    expression_attribute_values=None):
         """
         Delete an item in inside the dynamoDB tables
         :param item_key:
@@ -89,8 +89,6 @@ class DynamoDb:
             delete_params['ConditionExpression'] = condition_expression
         if expression_attribute_values:
             delete_params['ExpressionAttributeValues'] = expression_attribute_values
-        for key, value in params:
-            delete_params[key] = value
         try:
             self.table.delete_item(**delete_params)
         except ClientError as err:
