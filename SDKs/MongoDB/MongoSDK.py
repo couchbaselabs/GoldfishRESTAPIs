@@ -1,6 +1,5 @@
 import logging
 from pymongo import MongoClient
-
 from .MongoConfig import MongoConfig
 
 
@@ -34,12 +33,15 @@ class MongoSDK(MongoConfig):
         super().__init__(self.mongo_ip, self.port,
                          self.username, self.password, self.database_name)
 
-        # create a mongoDB client
-        if self.username and self.password:
-            self.client = MongoClient(
-                f"mongodb://{self.username}:{self.password}@{self.mongo_ip}:{self.port}/{self.database_name}")
+        if config.atlas_url:
+            self.client = MongoClient(config.atlas_url, tlsAllowInvalidCertificates=True)
         else:
-            self.client = MongoClient(f"mongodb://{self.mongo_ip}:{self.port}")
+            # create a mongoDB client
+            if self.username and self.password:
+                self.client = MongoClient(
+                    f"mongodb://{self.username}:{self.password}@{self.mongo_ip}:{self.port}/{self.database_name}")
+            else:
+                self.client = MongoClient(f"mongodb://{self.mongo_ip}:{self.port}")
 
         self.db = self.client[self.database_name]
 

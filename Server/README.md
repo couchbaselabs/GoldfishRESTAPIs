@@ -55,12 +55,13 @@ The server should start running on http://127.0.0.1:5000/
             "password": "MongoDB_Password",
             "database_name": "Database_Name, This would create the database if it doesn't exists",
             "collection_name": "Collection_Name, This would create the collection if it doesn't exists",
-            "target_num_docs": "num_docs arount which you want the CRUD to run.
+            "target_num_docs": "num_docs arount which you want the CRUD to run. It will load/delete docs till this value is attained and then start crud"
           }
         ```
       + Optional Parameters
            ```
              {
+               "atlas_url": "This will override all the request body parameters and start running loader on mongodb atlas"
                "loader_id": "This can be used to restart a loader",
                "time_for_crud_in_mins": "If you want the crud to run for some time you can add this to your body. By default loader runs infinitely."
                "num_buffer": "Buffer number of documents. By default it is 500. It won't let your num_docs go below num_docs-num_buffer nor go above num_docs+num_buffer.

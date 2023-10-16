@@ -96,8 +96,12 @@ def start_mongo_loader():
             loader_data = {"loader_id": loader_id, "docloader": DocLoader(), "status": "running",
                            "database": params['database_name'], "collection": params['collection_name']}
 
-            mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
-                                       params['database_name'])
+            if params['atlas_url']:
+                mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
+                                           params['database_name'], params['atlas_url'])
+            else:
+                mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
+                                           params['database_name'])
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mongo,
                                        args=(mongo_config, params['collection_name'], params['target_num_docs'],
                                              params.get('time_for_crud_in_mins', float('inf')),
