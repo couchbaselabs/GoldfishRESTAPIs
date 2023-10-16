@@ -149,3 +149,68 @@ class GoldfishAPI(GoldfishRequests):
         else:
             resp = self.do_internal_request(url, method="DELETE", headers=self.basic_headers)
         return resp
+
+    def create_api_keys(self, tenant_id, project_id, instance_id, analytics_role,
+                        buckets = None, headers=None):
+        """"
+            Create an analytics apikey
+
+            Parameters:
+                tenant_id (str): The ID of the tenant associated with the project.
+                project_id (str): The ID of the project where the instance is located.
+                instance_id (str): The ID of the Goldfish instance to create keys for.
+                analytics_role(str): analytics_admin, analytics_manager, analytics_reader, analytics_select
+                buckets ([BucketResources]) buckets are the bucket level permissions associated with the APIKey.
+                [ BucketResources (dict)
+                    {
+                        name (str) name of the bucket.
+                        scopes ([ScopeResources])
+                        [ ScopeResources (dict)
+                            {
+                                name (str) name of the scope.
+                                collections (list) list of collection names
+                            }
+                        ]
+                    }
+                ]
+                headers (dict, optional): Additional headers to include in the request. Default is None.
+        """
+        payload = {
+            "permissions": {
+                analytics_role: {
+                    "buckets": buckets
+                }
+            }
+        }
+
+        url = "{}/v2/organizations/{}/projects/instance/{}/apikeys".format(self.internal_url, tenant_id,
+                                                                           project_id, instance_id)
+        if headers:
+            resp = self.do_internal_request(url, method="POST",
+                                            params=json.dumps(payload),
+                                            headers=headers)
+        else:
+            resp = self.do_internal_request(url, method="POST",
+                                            params=json.dumps(payload),
+                                            headers=self.basic_headers)
+
+        return resp
+
+    def delete_api_keys(self, tenant_id, project_id, instance_id, api_key, headers=None):
+        """
+            Revoke an analytics apikey
+
+            tenant_id (str): The ID of the tenant associated with the project.
+            project_id (str): The ID of the project where the instance is located.
+            instance_id (str): The ID of the Goldfish instance to create keys for.
+            api_key (str): api key id.
+            headers (dict, optional): Additional headers to include in the request. Default is None.
+
+        """
+        url = "{}/v2/organizations/{}/projects/{}/instance/{}/apikeys/{}".format(self.internal_url, tenant_id, project_id,
+                                                                                 instance_id, api_key)
+        if headers:
+            resp = self.do_internal_request(url, method="DELETE", headers=headers)
+        else:
+            resp = self.do_internal_request(url, method="DELETE", headers=self.basic_headers)
+        return resp
