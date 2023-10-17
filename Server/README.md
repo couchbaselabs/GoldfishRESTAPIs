@@ -24,7 +24,7 @@ https://api.postman.com/collections/23120857-39d26b69-12db-423d-8484-73de6a03146
 
 1. Clone the repository:
 ```
-git clone https://github.com/yourusername/docloading-server.git
+git clone https://github.com/couchbaselabs/GoldfishRESTAPIs.git
 ```
 2. Navigate to the project directory:
 ```
