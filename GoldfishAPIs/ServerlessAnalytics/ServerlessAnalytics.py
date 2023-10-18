@@ -151,7 +151,7 @@ class GoldfishAPI(GoldfishRequests):
         return resp
 
     def create_api_keys(self, tenant_id, project_id, instance_id, analytics_role,
-                        buckets = None, headers=None):
+                        buckets=None, headers=None):
         """"
             Create an analytics apikey
 
@@ -207,7 +207,8 @@ class GoldfishAPI(GoldfishRequests):
             headers (dict, optional): Additional headers to include in the request. Default is None.
 
         """
-        url = "{}/v2/organizations/{}/projects/{}/instance/{}/apikeys/{}".format(self.internal_url, tenant_id, project_id,
+        url = "{}/v2/organizations/{}/projects/{}/instance/{}/apikeys/{}".format(self.internal_url, tenant_id,
+                                                                                 project_id,
                                                                                  instance_id, api_key)
         if headers:
             resp = self.do_internal_request(url, method="DELETE", headers=headers)

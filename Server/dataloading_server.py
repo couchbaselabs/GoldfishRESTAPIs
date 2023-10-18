@@ -1,8 +1,11 @@
+import boto3
+import os
 import threading
 import uuid
 from flask import Flask, request, jsonify
 
 from Docloader.doc_loader import DocLoader
+from SDKs.DynamoDB.dynamo_sdk import DynamoDb
 from SDKs.MongoDB.MongoConfig import MongoConfig
 from SDKs.MongoDB.MongoSDK import MongoSDK
 from SDKs.MySQL.MySQL_config import MySQLConfig
@@ -231,6 +234,229 @@ def drop_mongo_collection():
         return params_check
 
 
+# -- Dynamo --
+
+def create_credentials_for_dynamo(access_key, secret_key, region):
+    aws_directory = os.path.expanduser("~/.aws")
+    credentials_path = os.path.join(aws_directory, "credentials")
+    config_path = os.path.join(aws_directory, "config")
+
+    # Ensure the .aws directory exists
+    if os.path.exists(aws_directory):
+        # Remove existing credentials and config files
+        os.remove(credentials_path)
+        os.remove(config_path)
+    else:
+        # Create the .aws directory
+        os.makedirs(aws_directory)
+
+    # Write variables to the credentials file
+    with open(credentials_path, "w") as credentials_file:
+        credentials_file.write("[default]\n")
+        credentials_file.write(f"aws_access_key_id = {access_key}\n")
+        credentials_file.write(f"aws_secret_access_key = {secret_key}\n")
+
+    # Write variables to the config file
+    with open(config_path, "w") as config_file:
+        config_file.write("[default]\n")
+        config_file.write(f"region = {region}\n")
+
+    print("Configuration files created successfully.")
+
+
+def init_table(dynamo_object, table_name, primary_key):
+    KeySchema = {f'{primary_key}': 'HASH', }  # Partition key
+    AttributeDefinitions = {f'{primary_key}': 'S', }
+    dynamo_object.create_table(table_name, KeySchema, AttributeDefinitions,
+                               {'ReadCapacityUnits': 10000, 'WriteCapacityUnits': 10000})
+
+
+def check_aws_credentials(access_key, secret_key, region, session_token=None):
+    try:
+        # Create an IAM client
+        iam = boto3.client('iam', aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region,
+                           aws_session_token=session_token)
+
+        # Call a simple IAM operation to check if the credentials are valid
+        iam.get_user()
+
+        return True, "AWS credentials are valid."
+
+    except Exception as e:
+        return False, f"An error occurred: {e}"
+
+
+@app.route('/dynamo/start_loader', methods=['POST'])
+def start_dynamo_loader():
+    params = request.json
+    checklist = ["access_key", "secret_key", "region", "primary_key_field", "table_name", "target_num_docs"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        loaders = loader_collection.find({})
+        # check if there is a loader already running on same db and collection
+        for loader in loaders:
+            if loader['database'] == params['table_name'] and loader['collection'] == params['table_name'] and \
+                    loader['status'] == "running":
+                rv = {
+                    "ERROR": f"There is already a loader running on {params['table_name']}. You can poll for the loader to be stopped",
+                    "loader_id": loader['loader_id'],
+                    "database": loader['database'],
+                    "status": "failed"
+                }
+                return jsonify(rv), 409
+
+        try:
+            dynamo_obj = DynamoDb(params.get('url', None), params['table_name'], params['region'])
+            init_table(dynamo_obj, params['table_name'], params['primary_key_field'])
+        except:
+            pass
+
+        if "loader_id" in params:
+            loader_id = params['loader_id']
+            result = loader_collection.find_one({"loader_id": params['loader_id']})
+            if not result:
+                rv = {
+                    "ERROR": f"No loader found for loader_id {params['loader_id']}",
+                    "status": "failed"
+                }
+                return jsonify(rv), 409
+            loader_obj = loaderIdvsDocobject[loader_id]
+            loader_status = loader_obj.is_loader_running(db="dynamo")
+
+            if loader_status:
+                rv = {
+                    "response": f"Loader {loader_id} is already running",
+                    "loader_id": loader_id,
+                    "table": result['database'],
+                    "status": "failed"
+                }
+                return jsonify(rv), 200
+            else:
+                loader_obj.start_running_loader(db="dynamo")
+                rv = {
+                    "response": f"Loader {loader_id} restarted successfully",
+                    "loader_id": loader_id,
+                    "table": result['database'],
+                    "status": "running"
+                }
+                loader_sdk.update_document(loader_collection_name, {"loader_id": loader_id},
+                                           {"status": "running"})
+                return jsonify(rv), 200
+        else:
+            resp, err = check_aws_credentials(params['access_key'], params['secret_key'], params['region'])
+            if not resp:
+                rv = {
+                    "ERROR": f"{resp}",
+                    "status": "failed"
+                }
+                return jsonify(rv), 409
+            create_credentials_for_dynamo(params['access_key'], params['secret_key'], params['region'])
+            loader_id = str(uuid.uuid4())
+
+            loader_data = {"loader_id": loader_id, "docloader": DocLoader(no_of_docs=1), "status": "running",
+                           "database": params['table_name'], "collection": params['table_name']}
+
+            thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_dynamodb,
+                                       args=(params['primary_key_field'],
+                                             int(params['target_num_docs']), params.get('url', None),
+                                             params['table_name'], params['region'],
+                                             params.get('time_for_crud_in_mins', None), params.get('num_buffer', 500)))
+            thread1.start()
+
+            loaderIdvsDocobject[loader_id] = loader_data['docloader']
+
+            # since threads would be deleted automatically so removing this field as of now.
+            # We would need this docloader object to stop the loader (update the class field)
+            del loader_data['docloader']
+
+            loader_sdk.insert_single_document(loader_collection_name, loader_data)
+
+            del loader_data['_id']
+            return jsonify(loader_data), 200
+    else:
+        return params_check
+
+
+@app.route('/dynamo/stop_loader', methods=['POST'])
+def stop_dynamo_loader():
+    params = request.json
+    checklist = ["loader_id"]
+    params_check = check_request_body(params, checklist)
+
+    if params_check:
+        loader_id = request.json.get("loader_id")
+
+        loaders = loader_collection.find({})
+        for loader in loaders:
+            if loader_id == loader['loader_id']:
+                if loader['status'] == "running":
+                    loaderIdvsDocobject[loader_id].stop_running_loader(db="dynamo")
+                    loader_sdk.update_document(loader_collection_name, {"loader_id": loader['loader_id']},
+                                               {"status": "stopped"})
+                    loader['status'] = "stopped"
+                    rv = {
+                        "response": f"Loader {loader_id} stopped successfully",
+                        "loader_id": loader_id,
+                        "table": loader['database'],
+                        "status": loader['status']
+                    }
+                    return jsonify(rv), 200
+                else:
+                    return jsonify({"response": f"Loader {loader_id} is not running"}), 200
+
+        return jsonify({"response": f"No loader found with ID {loader_id}"}), 200
+    else:
+        return params_check
+
+
+@app.route('/dynamo/count', methods=['GET'])
+def get_docs_in_dynamo():
+    params = request.json
+    checklist = ["table_name", "region"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        try:
+
+            dynamo_object = DynamoDb(params.get("url", None), params["table_name"], params["region"])
+            count = dynamo_object.scan_table(count=True)
+            rv = {
+                "count": count
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "error": str(e)
+            }
+            return jsonify(rv), 200
+
+    else:
+        return params_check
+
+
+@app.route('/dynamo/delete_table', methods=['DELETE'])
+def drop_dynamo_database():
+    params = request.json
+    checklist = ["table_name", "region"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        try:
+            dynamo_object = DynamoDb(params.get("url", None), params["table_name"], params["region"])
+            dynamo_object.delete_table()
+            rv = {
+                "response": f"SUCCESS, table {params['table_name']} deleted successfully"
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "Error": str(e)
+            }
+            return jsonify(rv), 200
+
+    else:
+        return params_check
+
+
+# -- s3 --
 @app.route('/s3/start_loader', methods=['POST'])
 def start_s3_loader():
     params = request.json
@@ -355,7 +581,7 @@ def drop_s3_bucket():
         try:
             s3_sdk.delete_bucket(params['bucket_name'])
             rv = {
-                "response": "SUCCESS"
+                "response": f"SUCCESS dropped bucket {bucket_name}"
             }
             return jsonify(rv), 200
         except Exception as e:

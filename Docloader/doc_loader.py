@@ -15,13 +15,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 import Docloader.docgen_template as template
 import SDKs.DynamoDB.dynamo_sdk as dynamoSdk
+from SDKs.DynamoDB.dynamo_sdk import DynamoDb
 from SDKs.MongoDB.MongoConfig import MongoConfig
 from SDKs.MongoDB.MongoSDK import MongoSDK
 from SDKs.MySQL.MySqlSDK import MySQLSDK
 from SDKs.s3.s3_SDK import s3SDK
 from SDKs.s3.s3_config import s3Config
 from SDKs.s3.s3_operations import s3Operations
-from SDKs.DynamoDB.dynamo_sdk import DynamoDb
 
 
 class DocLoader:
@@ -41,6 +41,7 @@ class DocLoader:
         self.stop_dynamo_loader = False
         self.stop_s3_loader = False
         self.stop_mysql_loader = False
+        self.stop_dynamo_loader = False
 
     def float_to_str(self, obj: any) -> any:
         """
@@ -109,7 +110,7 @@ class DocLoader:
         elif db == "mysql":
             self.stop_mysql_loader = True
         elif db == "dynamo":
-            self.stop_mysql_loader = True
+            self.stop_dynamo_loader = True
 
     def start_running_loader(self, db):
         """
@@ -125,7 +126,7 @@ class DocLoader:
         elif db == "mysql":
             self.stop_mysql_loader = False
         elif db == "dynamo":
-            self.stop_mysql_loader = False
+            self.stop_dynamo_loader = False
 
     def generate_docs(self, index=None):
         """
@@ -247,35 +248,39 @@ class DocLoader:
     def perform_crud_on_dynamodb(self, p_key, target_num_docs, url=None, table=None, region_name=None,
                                  time_for_crud_in_mins=None,
                                  num_buffer=500):
+        try:
+            dynamo_object = DynamoDb(url, table, region_name)
 
-        dynamo_object = DynamoDb(url, table, region_name)
+            time_for_crud = True
+            if time_for_crud_in_mins is not None:
+                start_time = time.time()
+                time_for_crud = time.time() - start_time < time_for_crud_in_mins * 60
 
-        time_for_crud = True
-        if time_for_crud_in_mins is not None:
-            start_time = time.time()
-            time_for_crud = time.time() - start_time < time_for_crud_in_mins * 60
-
-        initial_load = True
-        while True:
-            while not self.stop_dynamo_loader and time_for_crud:
-                current_docs = dynamo_object.scan_table(count=True)
-                operation = random.choice(["insert", "delete"])
-                # Perform a random operation based on the selected type
-                if operation == "insert" and current_docs < target_num_docs + num_buffer:
-                    self.load_doc_to_dynamo(url, table, region_name)
-                elif operation == "delete" and current_docs > target_num_docs - num_buffer:
-                    self.delete_random_in_dynamodb(p_key, url, table, region_name)
-
-                if initial_load:
-                    while (not self.stop_dynamo_loader) and current_docs < target_num_docs:
-                        batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
-                        self.load_doc_to_dynamo(url, table, region_name, batch_size)
-                        current_docs = dynamo_object.scan_table(count=True)
-
-                    while (not self.stop_dynamo_loader) and current_docs > target_num_docs:
+            initial_load = True
+            while True:
+                while not self.stop_dynamo_loader and time_for_crud:
+                    current_docs = dynamo_object.scan_table(count=True)
+                    operation = random.choice(["insert", "delete"])
+                    # Perform a random operation based on the selected type
+                    if operation == "insert" and current_docs < target_num_docs + num_buffer:
+                        self.load_doc_to_dynamo(url, table, region_name)
+                        print('document inserted successfully')
+                    elif operation == "delete" and current_docs > target_num_docs - num_buffer:
                         self.delete_random_in_dynamodb(p_key, url, table, region_name)
-                        current_docs = dynamo_object.scan_table(count=True)
-                    initial_load = False
+
+                    if initial_load:
+                        print(f"starting initial load to meet docs")
+                        while (not self.stop_dynamo_loader) and current_docs < target_num_docs:
+                            batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
+                            self.load_doc_to_dynamo(url, table, region_name, batch_size)
+                            current_docs = dynamo_object.scan_table(count=True)
+
+                        while (not self.stop_dynamo_loader) and current_docs > target_num_docs:
+                            self.delete_random_in_dynamodb(p_key, url, table, region_name)
+                            current_docs = dynamo_object.scan_table(count=True)
+                        initial_load = False
+        except Exception as e:
+            raise Exception(e)
 
     # -- MONGODB --
     def load_doc_to_mongo(self, mongoConfig, collection_name, num_docs, batch_size):

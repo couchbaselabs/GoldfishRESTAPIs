@@ -1,5 +1,6 @@
 import logging
 from pymongo import MongoClient
+
 from .MongoConfig import MongoConfig
 
 
