@@ -143,5 +143,4 @@ class s3Operations:
         temp_path = tempfile.mktemp(suffix='.avro')
         with open(temp_path, "wb") as avro_file:
             writer(avro_file, parse_schema(avro_schema), avro_data)
-        print(temp_path)
         return temp_path

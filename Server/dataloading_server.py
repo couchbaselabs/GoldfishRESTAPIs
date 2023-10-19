@@ -581,7 +581,39 @@ def drop_s3_bucket():
         try:
             s3_sdk.delete_bucket(params['bucket_name'])
             rv = {
-                "response": f"SUCCESS dropped bucket {bucket_name}"
+                "response": f"SUCCESS dropped bucket {params['bucket_name']}"
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "error": str(e)
+            }
+            return jsonify(rv), 200
+
+    else:
+        return params_check
+
+
+@app.route('/s3/restore', methods=['POST'])
+def restore_s3_bucket():
+    params = request.json
+    checklist = ["access_key", "secret_key", "region", "num_buckets", "depth_level", "num_folders_per_level",
+                 "num_files_per_level", "bucket_name"]
+
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        try:
+            s3_config = s3Config(params['access_key'], params['secret_key'], params['region'], params['num_buckets'],
+                                 params['depth_level'], params['num_folders_per_level'],
+                                 params['num_files_per_level'], params.get('session_token', None),
+                                 params.get('file_size', 1024), params.get('max_file_size', 10240),
+                                 params.get('file_format', ['json', 'csv', 'tsv']))
+
+            DocLoader().restore_s3(
+                s3SDK(params['access_key'], params['secret_key'], params.get('session_token', None)),
+                params['bucket_name'], s3_config)
+            rv = {
+                "response": f"Success, restore started successfully"
             }
             return jsonify(rv), 200
         except Exception as e:
@@ -788,6 +820,29 @@ def delete_mysql_table():
         try:
             mysql_sdk.use_database(params['database_name'])
             mysql_sdk.delete_table(params["table_name"])
+            rv = {
+                "response": "SUCCESS"
+            }
+            return jsonify(rv), 200
+        except Exception as e:
+            rv = {
+                "error": str(e)
+            }
+            return jsonify(rv), 200
+
+    else:
+        return params_check
+
+@app.route('/mysql/restore', methods=['POST'])
+def restore_mysql_table():
+    params = request.json
+    checklist = ["host", "port", "username", "password", "doc_count", "database_name", "table_name", "table_columns"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
+                                   password=params['password'])
+        try:
+            DocLoader().rebalance_mysql_docs(doc_count=params['doc_count'], table_name=params['table_name'], table_columns=params['table_columns'], config=mysql_config, database_name=params['database_name'])
             rv = {
                 "response": "SUCCESS"
             }

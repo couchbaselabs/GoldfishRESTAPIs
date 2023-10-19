@@ -439,7 +439,7 @@ class DocLoader:
             folder_path += f'Depth_{level}_Folder_{random.randint(0, num_folders - 1)}/'
         return folder_path
 
-    def create_s3_using_specified_config(self, s3_config, skip_bucket=False, bucket=[]):
+    def create_s3_using_specified_config(self, s3_config, skip_bucket_creation=False, bucket=[]):
         """
                Create an S3 client using the specified configuration.
 
@@ -454,7 +454,7 @@ class DocLoader:
         if bucket:
             buckets = bucket
         s3 = s3SDK(s3_config.access_key, s3_config.secret_key)
-        if not skip_bucket:
+        if not skip_bucket_creation:
             random_string = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
 
             print(f"######## STEP 1/2  : CREATING {s3_config.num_buckets} BUCKETS ########")
@@ -506,11 +506,10 @@ class DocLoader:
     def crud_for_s3_bucket(self, config, s3, s3_config, bucket, max_files, min_files, duration_minutes):
         self.print_s3_bucket_structure(s3, bucket)
         start_time = time.time()
-        print_bucket_struct = True
+        print_once = True
         while True:
-            if not self.stop_s3_loader:
-                print_bucket_struct = True
             while not self.stop_s3_loader and time.time() - start_time < duration_minutes * 60:
+                print_once = True
                 # Generate a random depth and folder path
                 depth_lvl = random.randint(0, config.depth_level - 1)
                 folder_path = self.generate_random_folder_path(config.num_folders_per_level, depth_lvl)
@@ -541,13 +540,13 @@ class DocLoader:
 
                     print(f"deleting file {file_name} on path {s3_object_key}")
                     s3.delete_file(bucket, s3_object_key)
-            if print_bucket_struct:
+            if print_once and not self.stop_s3_loader:
                 self.print_s3_bucket_structure(s3, bucket)
-                print_bucket_struct = True
+                print_once = False
 
-    def rebalance_s3(self, s3, bucket, config):
+    def restore_s3(self, s3, bucket, config):
         s3.empty_bucket(bucket)
-        self.create_s3_using_specified_config(config, skip_bucket=True, bucket=[bucket])
+        self.create_s3_using_specified_config(config, skip_bucket_creation=True, bucket=[bucket])
 
     def print_s3_bucket_structure(self, s3, bucket):
         s3.print_bucket_structure(bucket)
@@ -668,8 +667,8 @@ class DocLoader:
             if config is None or database_name is None:
                 raise Exception("MySQL config and Database name is required")
             else:
-                mysql_obj = init_mysql_setup(config, database_name)
-
+                mysql_obj = MySQLSDK(config)
+        mysql_obj.use_database(database_name)
         current_records_count = mysql_obj.get_total_records_count(table_name)
         print(current_records_count)
         while current_records_count > doc_count and current_records_count >= 0:
