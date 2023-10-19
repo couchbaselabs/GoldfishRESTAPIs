@@ -231,6 +231,28 @@ The server should start running on http://127.0.0.1:5000/
               "response": "SUCCESS"
            }
         ```
+  4. Restore S3 to some config
+      + Endpoint: /s3/restore
+      + Method: POST
+      + Request Body:
+        ```
+            {
+              "host": "MySQL_Host",
+              "port": "MySQL_Port",
+              "username": "MySQL_Username",
+              "password": "MySQL_Password",
+              "database_name": "Database_Name",
+              "table_name": "Table_Name",
+              "table_columns": "coloumn details, Ex: id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, address VARCHAR(255), avg_rating FLOAT, city VARCHAR(255), country VARCHAR(255)",
+              "bucket_name" : bucket name
+            }
+         ```
+      + Response: JSON with loader status
+        ```
+           {
+              "response": "SUCCESS"
+           }
+        ```
 
 ---
 
@@ -331,7 +353,28 @@ The server should start running on http://127.0.0.1:5000/
               "response": "SUCCESS"
            }
         ```
-
+  6. Restore MySQL to some config
+      + Endpoint: /mysql/restore
+      + Method: POST
+      + Request Body:
+        ```
+            {
+              "host": "MySQL_Host",
+              "port": "MySQL_Port",
+              "username": "MySQL_Username",
+              "password": "MySQL_Password",
+              "database_name": "Database_Name",
+              "table_name": "Table_Name",
+              "table_columns": "coloumn details, Ex: id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, address VARCHAR(255), avg_rating FLOAT, city VARCHAR(255), country VARCHAR(255)"
+              "doc_count": doc count to which you want to restore.
+            }
+         ```
+      + Response: JSON with loader status
+        ```
+           {
+              "response": "SUCCESS"
+           }
+        ```
 ---
 
 ## GENERIC LOADER ENDPOINTS
