@@ -166,7 +166,7 @@ def get_docs_in_mongo():
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
         mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
-                                   params['database_name'])
+                                   params['database_name'], params.get("atlas_url", None))
         mongo_sdk = MongoSDK(mongo_config)
         try:
             count = mongo_sdk.get_current_doc_count(params['collection_name'])
@@ -191,7 +191,7 @@ def drop_mongo_database():
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
         mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
-                                   params['database_name'])
+                                   params['database_name'], params.get("atlas_url", None))
         mongo_sdk = MongoSDK(mongo_config)
         try:
             mongo_sdk.drop_database(params['database_name'])
@@ -216,7 +216,7 @@ def drop_mongo_collection():
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
         mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
-                                   params['database_name'])
+                                   params['database_name'], params.get("atlas_url", None))
         mongo_sdk = MongoSDK(mongo_config)
         try:
             mongo_sdk.drop_collection(params['database_name'], params['collection_name'])
