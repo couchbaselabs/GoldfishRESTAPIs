@@ -23,6 +23,10 @@ class DynamoDb:
         else:
             self.dyn_resource = boto3.resource(
                 'dynamodb', endpoint_url=endpoint_url)
+        if region:
+            self.client = boto3.client('dynamodb', region_name=region)
+        else:
+            self.client = boto3.client('dynamodb')
         self.table = self.dyn_resource.Table(name=table) if table else None
         self.table_name = table
         self.region = region
@@ -277,3 +281,21 @@ class DynamoDb:
                 "Couldn't load data into table %s. Here's why: %s: %s", self.table.name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
+
+    def enable_image_streaming(self, StreamViewType="NEW_IMAGE", table_name=None):
+        try:
+            if not self.table and not table_name:
+                raise Exception("Dyanamo object should have table name, or pass table_name as parameter")
+            else:
+                if not self.table:
+                    self.table_name = table_name
+                self.client.update_table(
+                    TableName=self.table_name,
+                    StreamSpecification={
+                        'StreamEnabled': True,
+                        'StreamViewType': StreamViewType
+                    }
+                )
+                print(f"DynamoDB Stream enabled for table {table_name}")
+        except Exception as e:
+            print(f"Error enabling DynamoDB Stream: {e}")

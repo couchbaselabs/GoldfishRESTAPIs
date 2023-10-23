@@ -269,6 +269,7 @@ def init_table(dynamo_object, table_name, primary_key):
     AttributeDefinitions = {f'{primary_key}': 'S', }
     dynamo_object.create_table(table_name, KeySchema, AttributeDefinitions,
                                {'ReadCapacityUnits': 10000, 'WriteCapacityUnits': 10000})
+    dynamo_object.enable_image_streaming()
 
 
 def check_aws_credentials(access_key, secret_key, region, session_token=None):
