@@ -1,6 +1,7 @@
 import boto3
 import concurrent.futures
 import logging
+import math
 import os
 import time
 from boto3.s3.transfer import TransferConfig
@@ -315,17 +316,20 @@ class s3SDK:
         if depth_lvl >= config.depth_level:
             return
 
-        # Define a ThreadPoolExecutor with a maximum of, for example, 5 threads.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             futures = []
 
             for folder_num in range(config.num_folders_per_level):
                 folder_name = f'Depth_{depth_lvl}_Folder_{folder_num}/'
 
-                for count, file_type in enumerate(file_types):
+                for count in range(int(math.ceil(config.num_files_per_level / config.num_folders_per_level))):
+                    file_type = file_types[count % len(file_types)]
                     file_name = f"{count}.{file_type}"
-                    file_content = s3_op.create_file_with_required_file_type(file_type, config.file_size)
-
+                    file_content = s3_op.create_file_with_required_file_type(file_type, config.file_size,
+                                                                             config.num_rows_per_file)
+                    if file_type != "json":
+                        with open(file_content, 'rb') as file:
+                            file_content = file.read()
                     s3_object_key = os.path.join(base_path, folder_name, file_name)
 
                     # Submit the task to the executor
