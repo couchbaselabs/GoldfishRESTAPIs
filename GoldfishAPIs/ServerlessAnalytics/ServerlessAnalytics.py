@@ -150,6 +150,39 @@ class GoldfishAPI(GoldfishRequests):
             resp = self.do_internal_request(url, method="DELETE", headers=self.basic_headers)
         return resp
 
+    def update_goldfish_instance(self, tenant_id, project_id, instance_id, name, description, nodes,
+                                 headers=None, **kwargs)
+        """
+            Modify a specific Goldfish instance within a project.
+
+            Parameters:
+                tenant_id (str): The ID of the tenant associated with the project.
+                project_id (str): The ID of the project where the instance is located.
+                instance_id (str): The ID of the Goldfish instance to delete.
+                name (str): The name of the Goldfish instance.
+                description (str): A description for the Goldfish instance.
+                nodes (int): The number of nodes to allocate for the instance.
+                headers (dict, optional): Additional headers to include in the request. Default is None.
+                **kwargs: Additional keyword arguments to pass to the API request.
+        """
+
+        url = "{}/v2/organizations/{}/projects/{}/instance/{}".format(self.internal_url, tenant_id, project_id,
+                                                                      instance_id)
+        body = {
+            "name": name,
+            "description": description,
+            "nodes": nodes
+        }
+        for key, value in kwargs.items():
+            body[key] = value
+        if headers:
+            resp = self.do_internal_request(url, method="PATCH", params=json.dumps(body),
+                                            headers=headers)
+        else:
+            resp = self.do_internal_request(url, method="PATCH", params=json.dumps(body),
+                                            headers=self.basic_headers)
+        return resp
+
     def create_api_keys(self, tenant_id, project_id, instance_id, analytics_role,
                         buckets=None, headers=None):
         """"
