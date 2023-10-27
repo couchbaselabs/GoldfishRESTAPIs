@@ -151,7 +151,7 @@ class GoldfishAPI(GoldfishRequests):
         return resp
 
     def update_goldfish_instance(self, tenant_id, project_id, instance_id, name, description, nodes,
-                                 headers=None, **kwargs)
+                                 headers=None, **kwargs):
         """
             Modify a specific Goldfish instance within a project.
 
