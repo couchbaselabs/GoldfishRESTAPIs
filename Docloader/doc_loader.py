@@ -160,10 +160,9 @@ class DocLoader:
         return documents
 
     # -- DYNAMODB --
-    def load_doc_to_dynamo(self, url=None, table=None, region_name=None, batch_size=1000, max_concurrent_batches=1000):
+    def load_doc_to_dynamo(self, access_key, secret_key, session_token=None, table=None, region_name=None,
+                           batch_size=1000, max_concurrent_batches=1000):
         """
-
-        :param url: dynamoDB url
         :param table: dynamoDb table name
         :param batch_size:
         :param max_concurrent_batches:
@@ -171,7 +170,8 @@ class DocLoader:
         Either region or url is required, table name is required if table already exist
         """
         start = time.time()
-        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region=region_name)
+        dynamo_obj = dynamoSdk.DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
+                                        table=table, region=region_name)
         with concurrent.futures.ThreadPoolExecutor(max_concurrent_batches) as executor:
             futures = []
             for i in range(0, self.no_of_docs, batch_size):
@@ -202,81 +202,94 @@ class DocLoader:
         time_spent = end - start
         logging.info(f"Took {time_spent} to insert docs")
 
-    def delete_from_dynamodb(self, item_key, url=None, table=None, region_name=None, condition_expression=None,
+    def delete_from_dynamodb(self, access_key, secret_key, item_key, session_token=None, table=None, region_name=None,
+                             condition_expression=None,
                              expression_attribute_values=None):
         """
 
         Args:
-            url: Url of dynamodb
             table: table name of dynamodb
             region_name: region in which dynamodb is deployed
             item_key: item_key to be deleted
             condition_expression: condition to delete object
             expression_attribute_values: attribute values
-        Either region or url is required, table name is required if table already exist
+            table name is required if table already exist
         """
-        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region=region_name)
+        dynamo_obj = dynamoSdk.DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
+                                        table=table, region=region_name)
         dynamo_obj.delete_item(item_key=item_key, condition_expression=condition_expression,
                                expression_attribute_values=expression_attribute_values)
 
-    def update_in_dynamo(self, item_key, changed_object_json, url=None, table=None, region_name=None):
+    def update_in_dynamo(self, access_key, secret_key, item_key, changed_object_json, session_token=None, table=None,
+                         region_name=None):
         """
 
         Args:
             item_key: item to change
             changed_object_json: keys to change
-            url:
             table:
             region_name:
-        Either region or url is required, table name is required if table already exist
+            table name is required if table already exist
         """
-        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region=region_name)
+        dynamo_obj = dynamoSdk.DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
+                                        table=table, region=region_name)
         dynamo_obj.update_item(item_key, changed_object_json)
 
-    def delete_random_in_dynamodb(self, p_key, url=None, table=None, region_name=None):
-        dynamo_obj = dynamoSdk.DynamoDb(endpoint_url=url, table=table, region=region_name)
+    def delete_random_in_dynamodb(self, access_key, secret_key, p_key, session_token=None, table=None,
+                                  region_name=None):
+        dynamo_obj = dynamoSdk.DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
+                                        table=table, region=region_name)
         response = dynamo_obj.scan_table()
         if len(response) > 0:
             random_item = random.choice(response)
             try:
-                self.delete_from_dynamodb(url=url, table=table, region_name=region_name,
+                self.delete_from_dynamodb(access_key=access_key, secret_key=secret_key, session_token=session_token,
+                                          table=table, region_name=region_name,
                                           item_key={p_key: random_item[p_key]})
                 print("Document deleted successfully")
             except Exception as e:
                 logging.info(f"Error : {str(e)}")
 
-    def perform_crud_on_dynamodb(self, p_key, target_num_docs, url=None, table=None, region_name=None,
+    def perform_crud_on_dynamodb(self, access_key, secret_key, p_key, target_num_docs, session_token=None, table=None,
+                                 region_name=None,
                                  time_for_crud_in_mins=None,
-                                 num_buffer=500):
+                                 num_buffer=500, initial_load=False):
         try:
-            dynamo_object = DynamoDb(url, table, region_name)
+            dynamo_object = DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
+                                     table=table, region=region_name)
 
             time_for_crud = True
             if time_for_crud_in_mins is not None:
                 start_time = time.time()
                 time_for_crud = time.time() - start_time < time_for_crud_in_mins * 60
 
-            initial_load = True
             while True:
                 while not self.stop_dynamo_loader and time_for_crud:
                     current_docs = dynamo_object.scan_table(count=True)
                     operation = random.choice(["insert", "delete"])
                     # Perform a random operation based on the selected type
                     if operation == "insert" and current_docs < target_num_docs + num_buffer:
-                        self.load_doc_to_dynamo(url, table, region_name)
+                        self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
+                                                session_token=session_token, table=table, region_name=region_name,
+                                                batch_size=1)
                         print('document inserted successfully')
                     elif operation == "delete" and current_docs > target_num_docs - num_buffer:
-                        self.delete_random_in_dynamodb(p_key, url, table, region_name)
-
+                        self.delete_random_in_dynamodb(access_key=access_key, secret_key=secret_key,
+                                                       session_token=session_token, region_name=region_name,
+                                                       p_key=p_key, table=table)
                     if initial_load:
                         print(f"starting initial load to meet docs")
                         while (not self.stop_dynamo_loader) and current_docs < target_num_docs:
                             batch_size = self.calculate_optimal_batch_size(target_num_docs, current_docs, 10000)
-                            self.load_doc_to_dynamo(url, table, region_name, batch_size)
+                            self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
+                                                    session_token=session_token, table=table, region_name=region_name,
+                                                    batch_size=batch_size)
                             current_docs = dynamo_object.scan_table(count=True)
 
                         while (not self.stop_dynamo_loader) and current_docs > target_num_docs:
-                            self.delete_random_in_dynamodb(p_key, url, table, region_name)
+                            self.delete_random_in_dynamodb(access_key=access_key, secret_key=secret_key,
+                                                           session_token=session_token, region_name=region_name,
+                                                           p_key=p_key, table=table)
                             current_docs = dynamo_object.scan_table(count=True)
                         initial_load = False
         except Exception as e:

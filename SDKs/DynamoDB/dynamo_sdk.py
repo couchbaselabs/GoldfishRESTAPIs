@@ -1,10 +1,3 @@
-"""
-SDK for dynamoDB
-You likely have your AWS credentials already configured on your machine before using this class
-AWS Access Key ID: "yourAccessKeyId"
-AWS Secret Access Key: "yourAccessKey"
-Default region name : "yourRegionName"
-"""
 import boto3
 import logging
 from botocore.exceptions import ClientError
@@ -15,21 +8,62 @@ class DynamoDb:
     SDK class for dynamoDb, Helps in managing dynamoDB entities
     """
 
-    def __init__(self, endpoint_url=None, table=None, region=None):
-        if endpoint_url is None and region is None:
-            raise ValueError("DynamoDB URL or region is required")
-        if endpoint_url is None:
-            self.dyn_resource = boto3.resource('dynamodb', region_name=region)
-        else:
-            self.dyn_resource = boto3.resource(
-                'dynamodb', endpoint_url=endpoint_url)
-        if region:
-            self.client = boto3.client('dynamodb', region_name=region)
-        else:
-            self.client = boto3.client('dynamodb')
+    def __init__(self, access_key, secret_key, region, session_token=None, table=None):
+        logging.basicConfig()
+        self.logger = logging.getLogger("AWS_Util")
+        self.create_session(access_key, secret_key, region, session_token)
+        self.client = self.create_service_client(service_name="dynamodb", region=region)
+        self.dyn_resource = self.create_service_resource(resource_name="dynamodb")
+
         self.table = self.dyn_resource.Table(name=table) if table else None
         self.table_name = table
         self.region = region
+
+    def create_session(self, access_key, secret_key, region, session_token=None):
+        """
+        Create a session to AWS using the credentials provided.
+        If no credentials are provided then, credentials are read from aws_config.json file.
+
+        :param access_key: access key for the IAM user
+        :param secret_key: secret key for the IAM user
+        :param access_token:
+        """
+        try:
+            if session_token:
+                self.aws_session = boto3.Session(aws_access_key_id=access_key,
+                                                 aws_secret_access_key=secret_key,
+                                                 aws_session_token=session_token,
+                                                 region_name=region)
+            else:
+                self.aws_session = boto3.Session(aws_access_key_id=access_key,
+                                                 aws_secret_access_key=secret_key,
+                                                 region_name=region)
+        except Exception as e:
+            self.logger.error(e)
+
+    def create_service_client(self, service_name, region=None):
+        """
+        Create a low level client for the service specified.
+        If a region is not specified, the client is created in the default region (us-east-1).
+        :param service_name: name of the service for which the client has to be created
+        :param region: region in which the client has to created.
+        """
+        try:
+            if region is None:
+                return self.aws_session.client(service_name)
+            else:
+                return self.aws_session.client(service_name, region_name=region)
+        except ClientError as e:
+            self.logger.error(e)
+
+    def create_service_resource(self, resource_name):
+        """
+        Create a service resource object, to access resources related to service.
+        """
+        try:
+            return self.aws_session.resource(resource_name)
+        except Exception as e:
+            self.logger.error(e)
 
     def create_table(self, table_name, key_schema,
                      attribute_definitions, read_write_capacity_units, **params):
