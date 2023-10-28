@@ -14,6 +14,8 @@ import Docloader.docgen_template as template
 
 
 class s3Operations:
+    def __init__(self):
+        self.faker = Faker()
 
     def create_file_with_required_file_type(self, file_type, doc_size=1024, num_rows=1):
         if file_type == "json":
@@ -93,12 +95,43 @@ class s3Operations:
         return output_parquet
 
     def _generate_data(self, doc_size=1024):
-        faker_instance = faker.Faker()
-        hotel = template.Hotel(faker_instance)
-        hotel.generate_document(faker_instance, doc_size)
-        doc = json.loads(json.dumps(hotel, default=lambda o: o.__dict__))
-        del hotel, faker_instance
-        return doc
+        data = {
+            "address": self.faker.address(),
+            "avg_ratings": self.faker.pyfloat(left_digits=1, right_digits=1, positive=True),
+            "city": self.faker.city(),
+            "country": self.faker.country(),
+            "email": self.faker.email(),
+            "free_breakfast": int(self.faker.boolean()),
+            "free_parking": int(self.faker.boolean()),
+            "name": self.faker.name(),
+            "phone": self.faker.random_element(
+                elements=(1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0,
+                          7000.0, 8000.0, 9000.0, 10000.0)),
+            "price": self.faker.random_element(
+                elements=(1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0,
+                          7000.0, 8000.0, 9000.0, 10000.0)),
+            "public_likes": [self.faker.word() for _ in range(5)],
+            "reviews": [
+                {
+                    "date": self.faker.date_time_this_decade().isoformat(),
+                    "author": self.faker.name(),
+                    "rating": {
+                        "value": random.randint(1, 10),
+                        "cleanliness": random.randint(1, 10),
+                        "overall": random.randint(1, 10)
+                    }
+                } for _ in range(2)
+            ],
+            "type": "Hotel",
+            "url": self.faker.url()
+        }
+
+        # Ensure the doc size
+        extra_size = doc_size - len(str(data))
+        if extra_size > 0:
+            data["extra"] = ''.join(random.choices(string.ascii_letters, k=extra_size))
+
+        return data
 
     def _generate_data_multiple_rows(self, num_rows, doc_size=1024, num_workers=1):
         data_list = []
@@ -110,7 +143,7 @@ class s3Operations:
             # Collect the results
             for future in futures:
                 data_list.append(future.result())
-        print(time.time()-start_time)
+        print(time.time() - start_time)
         return data_list
 
     def create_avro_file(self, num_rows, avro_schema=None):
@@ -130,8 +163,8 @@ class s3Operations:
                     {"name": "free_breakfast", "type": ["int"], "default": 0},
                     {"name": "free_parking", "type": ["int"], "default": 1},
                     {"name": "name", "type": ["null", "string"], "default": None},
-                    {"name": "phone", "type": ["null", "string"], "default": None},
-                    {"name": "price", "type": ["null", "double"], "default": None},
+                    {"name": "phone", "type": ["float"], "default": 0.0},
+                    {"name": "price", "type": ["float"], "default": 0.0},
                     {"name": "public_likes", "type": {"type": "array", "items": "string"}},
                     {"name": "reviews",
                      "type": {"type": "array", "items": {"type": "record", "name": "Review", "fields": [
