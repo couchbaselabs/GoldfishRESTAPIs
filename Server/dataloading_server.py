@@ -234,36 +234,7 @@ def drop_mongo_collection():
         return params_check
 
 
-# -- Dynamo --
-
-def create_credentials_for_dynamo(access_key, secret_key, region):
-    aws_directory = os.path.expanduser("~/.aws")
-    credentials_path = os.path.join(aws_directory, "credentials")
-    config_path = os.path.join(aws_directory, "config")
-
-    # Ensure the .aws directory exists
-    if os.path.exists(aws_directory):
-        # Remove existing credentials and config files
-        os.remove(credentials_path)
-        os.remove(config_path)
-    else:
-        # Create the .aws directory
-        os.makedirs(aws_directory)
-
-    # Write variables to the credentials file
-    with open(credentials_path, "w") as credentials_file:
-        credentials_file.write("[default]\n")
-        credentials_file.write(f"aws_access_key_id = {access_key}\n")
-        credentials_file.write(f"aws_secret_access_key = {secret_key}\n")
-
-    # Write variables to the config file
-    with open(config_path, "w") as config_file:
-        config_file.write("[default]\n")
-        config_file.write(f"region = {region}\n")
-
-    print("Configuration files created successfully.")
-
-
+# -- Dynamo --`
 def init_table(dynamo_object, table_name, primary_key):
     KeySchema = {f'{primary_key}': 'HASH', }  # Partition key
     AttributeDefinitions = {f'{primary_key}': 'S', }
@@ -351,17 +322,19 @@ def start_dynamo_loader():
                     "status": "failed"
                 }
                 return jsonify(rv), 409
-            create_credentials_for_dynamo(params['access_key'], params['secret_key'], params['region'])
             loader_id = str(uuid.uuid4())
 
             loader_data = {"loader_id": loader_id, "docloader": DocLoader(no_of_docs=1), "status": "running",
                            "database": params['table_name'], "collection": params['table_name']}
 
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_dynamodb,
-                                       args=(params['primary_key_field'],
-                                             int(params['target_num_docs']), params.get('url', None),
-                                             params['table_name'], params['region'],
-                                             params.get('time_for_crud_in_mins', None), params.get('num_buffer', 500)))
+                                       args=(params['access_key'], params['secret_key'], params['region'],
+                                             params['primary_key_field'],
+                                             int(params['target_num_docs']),
+                                             params.get('session_token', None),
+                                             params['table_name'],
+                                             params.get('time_for_crud_in_mins', None), params.get('num_buffer', 500),
+                                             params.get("initial_load", False)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']
@@ -413,13 +386,14 @@ def stop_dynamo_loader():
 @app.route('/dynamo/count', methods=['GET'])
 def get_docs_in_dynamo():
     params = request.json
-    checklist = ["table_name", "region"]
+    checklist = ["access_key", "secret_key", "region", "table_name", "region"]
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
         try:
 
-            dynamo_object = DynamoDb(params.get("url", None), params["table_name"], params["region"])
-            count = dynamo_object.scan_table(count=True)
+            dynamo_object = DynamoDb(params['access_key'], params['secret_key'], params['region'],
+                                     params.get("session_token", None), params["table_name"])
+            count = dynamo_object.get_live_item_count()
             rv = {
                 "count": count
             }
@@ -437,11 +411,12 @@ def get_docs_in_dynamo():
 @app.route('/dynamo/delete_table', methods=['DELETE'])
 def drop_dynamo_database():
     params = request.json
-    checklist = ["table_name", "region"]
+    checklist = ["access_key", "secret_key", "region", "table_name"]
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
         try:
-            dynamo_object = DynamoDb(params.get("url", None), params["table_name"], params["region"])
+            dynamo_object = DynamoDb(params['access_key'], params['secret_key'], params['region'],
+                                     params.get("session_token", None), params["table_name"])
             dynamo_object.delete_table()
             rv = {
                 "response": f"SUCCESS, table {params['table_name']} deleted successfully"

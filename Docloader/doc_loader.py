@@ -250,10 +250,8 @@ class DocLoader:
             except Exception as e:
                 logging.info(f"Error : {str(e)}")
 
-    def perform_crud_on_dynamodb(self, access_key, secret_key, p_key, target_num_docs, session_token=None, table=None,
-                                 region_name=None,
-                                 time_for_crud_in_mins=None,
-                                 num_buffer=500, initial_load=False):
+    def perform_crud_on_dynamodb(self, access_key, secret_key, region_name, p_key, target_num_docs, session_token=None, table=None,
+                                 time_for_crud_in_mins=None, num_buffer=500, initial_load=False):
         try:
             dynamo_object = DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
                                      table=table, region=region_name)

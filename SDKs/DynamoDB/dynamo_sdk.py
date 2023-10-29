@@ -279,6 +279,27 @@ class DynamoDb:
             raise
         return items
 
+    def get_live_item_count(self):
+        doc_count = 0
+        response = self.client.scan(
+            TableName=self.table_name,
+            Select='COUNT',
+            ConsistentRead=True
+        )
+
+        doc_count += response['Count']
+
+        while 'LastEvaluatedKey' in response:
+            response = self.client.scan(
+                TableName=self.table_name,
+                Select='COUNT',
+                ConsistentRead=True,
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            doc_count += response['Count']
+
+        return doc_count
+
     def run_partiql(self, statement, params):
         """
         Run dynamoDB partiql queries
