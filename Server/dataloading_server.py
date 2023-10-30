@@ -39,8 +39,7 @@ def check_request_body(params, checklist):
 @app.route('/mongo/start_loader', methods=['POST'])
 def start_mongo_loader():
     params = request.json
-    checklist = ["ip", "port", "username", "password", "database_name", "collection_name",
-                 "target_num_docs"]
+    checklist = ["ip", "port", "username", "password", "database_name", "collection_name"]
 
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
@@ -60,7 +59,7 @@ def start_mongo_loader():
                 return jsonify(rv), 409
 
         # Run a loader whose loader ID is known
-        if "loader_id" in params:
+        if "loader_id" in params and params["loader_id"] != None:
             result = loader_collection.find_one({"loader_id": params['loader_id']})
             if not result:
                 rv = {
@@ -106,9 +105,8 @@ def start_mongo_loader():
                 mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
                                            params['database_name'])
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mongo,
-                                       args=(mongo_config, params['collection_name'], params['target_num_docs'],
-                                             params.get('time_for_crud_in_mins', float('inf')),
-                                             params.get('num_buffer', 500)))
+                                       args=(mongo_config, params['collection_name'],  params.get('num_buffer', 500),
+                                             params.get('initial_doc_count', None)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']
@@ -261,7 +259,7 @@ def check_aws_credentials(access_key, secret_key, region, session_token=None):
 @app.route('/dynamo/start_loader', methods=['POST'])
 def start_dynamo_loader():
     params = request.json
-    checklist = ["access_key", "secret_key", "region", "primary_key_field", "table_name", "target_num_docs"]
+    checklist = ["access_key", "secret_key", "region", "primary_key_field", "table_name"]
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
         loaders = loader_collection.find({})
@@ -283,7 +281,7 @@ def start_dynamo_loader():
         except:
             pass
 
-        if "loader_id" in params:
+        if "loader_id" in params and params["loader_id"] !=None:
             loader_id = params['loader_id']
             result = loader_collection.find_one({"loader_id": params['loader_id']})
             if not result:
@@ -330,11 +328,9 @@ def start_dynamo_loader():
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_dynamodb,
                                        args=(params['access_key'], params['secret_key'], params['region'],
                                              params['primary_key_field'],
-                                             int(params['target_num_docs']),
                                              params.get('session_token', None),
                                              params['table_name'],
-                                             params.get('time_for_crud_in_mins', None), params.get('num_buffer', 500),
-                                             params.get("initial_load", False)))
+                                             params.get('initial_doc_count', None), params.get('num_buffer', 500)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']
@@ -441,7 +437,7 @@ def start_s3_loader():
 
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
-        if "loader_id" in params:
+        if "loader_id" in params and not params["loader_id"]:
             loader_id = params['loader_id']
             result = loader_collection.find_one({"loader_id": params['loader_id']})
             if not result:
@@ -479,7 +475,7 @@ def start_s3_loader():
                            "database": "", "collection": ""}
 
             s3_config = s3Config(params['access_key'], params['secret_key'], params['region'], params['num_buckets'],
-                                 params['depth_level'], params['num_folders_per_level'],
+                                 params['depth_level'], pxarams['num_folders_per_level'],
                                  params['num_files_per_level'], params.get('session_token', None),
                                  params.get('file_size', 1024), params.get('max_file_size', 10240),
                                  params.get('file_format', ['json', 'csv', 'tsv']))
@@ -631,7 +627,7 @@ def start_mysql_loader():
                 }
                 return jsonify(rv), 409
 
-        if "loader_id" in params:
+        if "loader_id" in params and not params["loader_id"]:
             params['init_config'] = False
             result = loader_collection.find_one({"loader_id": params['loader_id']})
             if not result:
@@ -680,8 +676,8 @@ def start_mysql_loader():
 
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mysql,
                                        args=(mysql_obj, params['table_name'], table_columns,
-                                             params.get('duration_minutes', float('inf')),
-                                             params.get('max_files_extra', 50), params.get('atleast_min_files', None)))
+                                             params.get('num_buffer', 500),
+                                             params.get('initial_doc_count', None)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']
