@@ -38,7 +38,7 @@ class GoldfishAPI(GoldfishRequests):
         """
         url = "{}/internal/support/serverlessanalytics/service".format(self.internal_url)
         if headers:
-            resp = self._urllib_request(url, "GET", headers=self.cbc_api_request_headers)
+            resp = self._urllib_request(url, "GET", headers=headers)
         else:
             resp = self._urllib_request(url, "GET", headers=self.cbc_api_request_headers)
         return resp
@@ -52,13 +52,13 @@ class GoldfishAPI(GoldfishRequests):
         """
         url = '{}/internal/support/serverlessanalytics/service/{}'.format(self.internal_url, serviceId)
         if headers:
-            resp = self._urllib_request(url, "GET", headers=self.cbc_api_request_headers)
+            resp = self._urllib_request(url, "GET", headers=headers)
         else:
             resp = self._urllib_request(url, "GET", headers=self.cbc_api_request_headers)
         return resp
 
     def create_goldfish_instance(self, tenant_id, project_id, name, description, provider, region, nodes, headers=None,
-                                 **kwargs):
+                                 skip_jwt_retry=False, **kwargs):
         """
             Create a new Goldfish instance within a specified project.
 
@@ -86,6 +86,14 @@ class GoldfishAPI(GoldfishRequests):
         for key, value in kwargs.items():
             body[key] = value
 
+        if skip_jwt_retry:
+            if not headers:
+                headers = self.basic_headers
+            resp = self._urllib_request(url, method="POST",
+                                        headers=headers,
+                                        params=json.dumps(body))
+            return resp
+
         if headers:
             resp = self.do_internal_request(url, method="POST",
                                             params=json.dumps(body),
@@ -96,7 +104,8 @@ class GoldfishAPI(GoldfishRequests):
                                             headers=self.basic_headers)
         return resp
 
-    def get_goldfish_instances(self, tenant_id, project_id, headers=None):
+    def get_goldfish_instances(self, tenant_id, project_id, headers=None,
+                               skip_jwt_retry=False):
         """
             Retrieve a list of Goldfish instances within a specified project.
 
@@ -106,14 +115,22 @@ class GoldfishAPI(GoldfishRequests):
                 headers (dict, optional): Additional headers to include in the request. Default is None.
 
         """
+        if skip_jwt_retry:
+            if not headers:
+                headers = self.basic_headers
+            resp = self._urllib_request(url, method="GET",
+                                        headers=headers)
+            return resp
+
         url = "{}/v2/organizations/{}/projects/{}/instance".format(self.internal_url, tenant_id, project_id)
         if headers:
-            resp = self.do_internal_request(url, method="GET", headers=self.basic_headers)
+            resp = self.do_internal_request(url, method="GET", headers=headers)
         else:
             resp = self.do_internal_request(url, method="GET", headers=self.basic_headers)
         return resp
 
-    def get_specific_goldfish_instance(self, tenant_id, project_id, instance_id, headers=None):
+    def get_specific_goldfish_instance(self, tenant_id, project_id, instance_id, headers=None,
+                                       skip_jwt_retry=False):
         """
             Retrieve information about a specific Goldfish instance within a project.
 
@@ -125,13 +142,21 @@ class GoldfishAPI(GoldfishRequests):
         """
         url = "{}/v2/organizations/{}/projects/{}/instance/{}".format(self.internal_url, tenant_id, project_id,
                                                                       instance_id)
+        if skip_jwt_retry:
+            if not headers:
+                headers = self.basic_headers
+            resp = self._urllib_request(url, method="GET",
+                                        headers=headers)
+            return resp
+
         if headers:
-            resp = self.do_internal_request(url, method="GET", headers=self.basic_headers)
+            resp = self.do_internal_request(url, method="GET", headers=headers)
         else:
             resp = self.do_internal_request(url, method="GET", headers=self.basic_headers)
         return resp
 
-    def delete_goldfish_instance(self, tenant_id, project_id, instance_id, headers=None):
+    def delete_goldfish_instance(self, tenant_id, project_id, instance_id, headers=None,
+                                 skip_jwt_retry=False):
         """
             Delete a specific Goldfish instance within a project.
 
@@ -144,6 +169,13 @@ class GoldfishAPI(GoldfishRequests):
 
         url = "{}/v2/organizations/{}/projects/{}/instance/{}".format(self.internal_url, tenant_id, project_id,
                                                                       instance_id)
+        if skip_jwt_retry:
+            if not headers:
+                headers = self.basic_headers
+            resp = self._urllib_request(url, method="DELETE",
+                                        headers=headers)
+            return resp
+
         if headers:
             resp = self.do_internal_request(url, method="DELETE", headers=headers)
         else:
@@ -151,7 +183,7 @@ class GoldfishAPI(GoldfishRequests):
         return resp
 
     def update_goldfish_instance(self, tenant_id, project_id, instance_id, name, description, nodes,
-                                 headers=None, **kwargs):
+                                 headers=None, skip_jwt_retry=False, **kwargs):
         """
             Modify a specific Goldfish instance within a project.
 
@@ -175,6 +207,14 @@ class GoldfishAPI(GoldfishRequests):
         }
         for key, value in kwargs.items():
             body[key] = value
+
+        if skip_jwt_retry:
+            if not headers:
+                headers = self.basic_headers
+            resp = self._urllib_request(url, method="PATCH",
+                                        headers=headers)
+            return resp
+
         if headers:
             resp = self.do_internal_request(url, method="PATCH", params=json.dumps(body),
                                             headers=headers)
@@ -184,7 +224,7 @@ class GoldfishAPI(GoldfishRequests):
         return resp
 
     def create_api_keys(self, tenant_id, project_id, instance_id, analytics_role,
-                        buckets=None, headers=None):
+                        buckets = None, headers=None, skip_jwt_retry=False):
         """"
             Create an analytics apikey
 
@@ -218,6 +258,14 @@ class GoldfishAPI(GoldfishRequests):
 
         url = "{}/v2/organizations/{}/projects/instance/{}/apikeys".format(self.internal_url, tenant_id,
                                                                            project_id, instance_id)
+        if skip_jwt_retry:
+            if not headers:
+                headers = self.basic_headers
+            resp = self._urllib_request(url, method="POST",
+                                        headers=headers,
+                                        params=json.dumps(payload))
+            return resp
+
         if headers:
             resp = self.do_internal_request(url, method="POST",
                                             params=json.dumps(payload),
@@ -229,7 +277,8 @@ class GoldfishAPI(GoldfishRequests):
 
         return resp
 
-    def delete_api_keys(self, tenant_id, project_id, instance_id, api_key, headers=None):
+    def delete_api_keys(self, tenant_id, project_id, instance_id, api_key, headers=None,
+                        skip_jwt_retry=False):
         """
             Revoke an analytics apikey
 
@@ -243,6 +292,13 @@ class GoldfishAPI(GoldfishRequests):
         url = "{}/v2/organizations/{}/projects/{}/instance/{}/apikeys/{}".format(self.internal_url, tenant_id,
                                                                                  project_id,
                                                                                  instance_id, api_key)
+        if skip_jwt_retry:
+            if not headers:
+                headers = self.basic_headers
+            resp = self._urllib_request(url, method="DELETE",
+                                        headers=headers)
+            return resp
+
         if headers:
             resp = self.do_internal_request(url, method="DELETE", headers=headers)
         else:
