@@ -2,19 +2,19 @@ import requests
 import json
 
 
-class DocloadingAPIs(server_ip, server_port):
-    def __init__(self):
+class DocloadingAPIs:
+    def __init__(self, server_ip, server_port):
         self.server_ip = server_ip
         self.server_port = server_port
-        self.url = f"http://{server_ip}:{server_port}/"
+        self.url = "http://{}:{}/".format(server_ip, server_port)
         self.headers = {
             'Content-Type': 'application/json'
         }
 
     # mongo
     def start_mongo_loader(self, ip, database_name, collection_name, atlas_url=None, port=27017,
-                            username="", password="", headers=None,
-                            num_buffer=500, initial_doc_count=None, loader_id=None):
+                           username="", password="", headers=None,
+                           num_buffer=500, initial_doc_count=None, loader_id=None):
         url = self.url + "mongo/start_loader"
         if not headers:
             headers = self.headers
@@ -32,7 +32,7 @@ class DocloadingAPIs(server_ip, server_port):
             'loader_id': loader_id
         })
 
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = requests.post(url, headers=headers, data=payload)
         return response
 
     def stop_crud_on_mongo(self, loader_id, headers=None):
@@ -44,10 +44,10 @@ class DocloadingAPIs(server_ip, server_port):
             "loader_id": loader_id
         })
 
-        return requests.request("POST", url, headers=headers, data=payload)
+        return requests.post(url, headers=headers, data=payload)
 
     def get_mongo_doc_count(self, headers, ip, database_name, collection_name, username=None, password=None,
-                            atlas_url=None):
+                            atlas_url=None, port=27017):
         url = self.url + "mongo/start_loader"
         if not headers:
             headers = self.headers
@@ -62,10 +62,11 @@ class DocloadingAPIs(server_ip, server_port):
             "atlas_url": atlas_url
         })
 
-        response = requests.request("GET", url, headers=headers, data=payload)
+        response = requests.get(url, headers=headers, data=payload)
         return response
 
-    def drop_mongo_database(self, ip, database_name, collection_name, username=None, password=None, headers=None, ):
+    def drop_mongo_database(self, ip, database_name, collection_name, username=None, password=None, headers=None,
+                            port=27017):
         url = self.url + "mongo/delete_database"
         if not headers:
             headers = self.headers
@@ -79,7 +80,7 @@ class DocloadingAPIs(server_ip, server_port):
             "collection_name": collection_name,
         })
 
-        return requests.request("DELETE", url, headers=headers, data=payload)
+        return requests.delete(url, headers=headers, data=payload)
 
     def delete_mongo_collection(self, ip, port, database_name, collection_name, username=None, password=None,
                                 headers=None):
@@ -97,12 +98,13 @@ class DocloadingAPIs(server_ip, server_port):
             "collection_name": collection_name,
         })
 
-        return requests.request("DELETE", url, headers=headers, data=payload)
+        return requests.delete(url, headers=headers, data=payload)
 
     # Dynamo
-    def start_dynamo_loader(self, access_key, secret_key, primary_key_field, table_name, region, initial_doc_count, num_buffer=500,
-                            headers=None, session_token=None, loader_id=None ):
-        endpoint_url = f"{self.url}/dynamo/start_loader"
+    def start_dynamo_loader(self, access_key, secret_key, primary_key_field, table_name, region, initial_doc_count,
+                            num_buffer=500,
+                            headers=None, session_token=None, loader_id=None):
+        endpoint_url = "{}dynamo/start_loader".format(self.url)
         if not headers:
             headers = self.headers
 
@@ -122,7 +124,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def stop_dynamo_loader(self, loader_id, headers=None):
-        endpoint_url = f"{self.url}/dynamo/stop_loader"
+        endpoint_url = "{}dynamo/stop_loader".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -135,7 +137,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def count_dynamo_documents(self, access_key, secret_key, region, table_name, headers=None):
-        endpoint_url = f"{self.url}/dynamo/count"
+        endpoint_url = "{}dynamo/count".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -151,7 +153,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def delete_dynamo_table(self, table_name, access_key, secret_key, region, headers=None):
-        endpoint_url = f"{self.url}/dynamo/delete_table"
+        endpoint_url = "{}dynamo/delete_table".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -169,7 +171,7 @@ class DocloadingAPIs(server_ip, server_port):
     # MySQL
     def start_mysql_loader(self, host, port, username, password, database_name, table_name, table_columns, init_config,
                            num_buffer=500, initial_doc_count=None, headers=None, loader_id=None):
-        endpoint_url = f"{self.url}/mysql/start_loader"
+        endpoint_url = "{}mysql/start_loader".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -192,7 +194,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def stop_mysql_loader(self, loader_id, headers=None):
-        endpoint_url = f"{self.url}/mysql/stop_loader"
+        endpoint_url = "{}mysql/stop_loader".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -205,7 +207,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def count_mysql_documents(self, host, port, username, password, database_name, table_name, headers=None):
-        endpoint_url = f"{self.url}/mysql/count"
+        endpoint_url = "{}mysql/count".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -223,7 +225,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def delete_mysql_database(self, host, port, username, password, database_name, table_name, headers=None):
-        endpoint_url = f"{self.url}/mysql/delete_database"
+        endpoint_url = "{}mysql/delete_database".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -241,7 +243,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def delete_mysql_table(self, host, port, username, password, database_name, table_name, headers=None):
-        endpoint_url = f"{self.url}/mysql/delete_table"
+        endpoint_url = "{}mysql/delete_table".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -260,7 +262,7 @@ class DocloadingAPIs(server_ip, server_port):
 
     def restore_mysql_database(self, host, port, username, password, database_name, table_name, table_columns,
                                doc_count, headers=None):
-        endpoint_url = f"{self.url}/mysql/restore"
+        endpoint_url = "{}mysql/restore".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -281,8 +283,9 @@ class DocloadingAPIs(server_ip, server_port):
 
     # s3
     def start_s3_loader(self, access_key, secret_key, region, num_buckets, depth_level, num_folders_per_level,
-                        num_files_per_level, file_format, headers=None, session_token=None, file_size=1024, loader_id=None):
-        endpoint_url = f"{self.url}/s3/start_loader"
+                        num_files_per_level, file_format, headers=None, session_token=None, file_size=1024,
+                        loader_id=None):
+        endpoint_url = "{}s3/start_loader".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -305,7 +308,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def stop_s3_loader(self, loader_id, headers=None):
-        endpoint_url = f"{self.url}/s3/stop_loader"
+        endpoint_url = "{}s3/stop_loader".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -319,7 +322,7 @@ class DocloadingAPIs(server_ip, server_port):
 
     def restore_s3_bucket(self, access_key, secret_key, region, num_buckets, depth_level, num_folders_per_level,
                           num_files_per_level, file_format, bucket_name, headers=None):
-        endpoint_url = f"{self.url}/s3/restore"
+        endpoint_url = "{}s3/restore".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -340,7 +343,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def delete_s3_bucket(self, access_key, secret_key, region, bucket_name, headers=None):
-        endpoint_url = f"{self.url}/s3/delete_bucket"
+        endpoint_url = "{}s3/delete_bucket".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -357,7 +360,7 @@ class DocloadingAPIs(server_ip, server_port):
 
     # Generic
     def get_all_loaders(self, headers=None):
-        endpoint_url = f"{self.url}/loaders"
+        endpoint_url = "{}loaders".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -366,7 +369,7 @@ class DocloadingAPIs(server_ip, server_port):
         return response
 
     def get_specific_loader(self, loader_id, headers=None):
-        endpoint_url = f"{self.url}/loaders/{loader_id}"
+        endpoint_url = "{}loaders/{}".format(self.url, loader_id)
 
         if not headers:
             headers = self.headers
