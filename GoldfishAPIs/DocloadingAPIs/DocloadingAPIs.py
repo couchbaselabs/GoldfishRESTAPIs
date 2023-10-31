@@ -14,8 +14,9 @@ class DocloadingAPIs:
     # mongo
     def start_mongo_loader(self, ip, database_name, collection_name, atlas_url=None, port=27017,
                            username="", password="", headers=None,
-                           num_buffer=500, initial_doc_count=None, loader_id=None):
-        url = self.url + "mongo/start_loader"
+                           num_buffer=0, initial_doc_count=None, loader_id=None):
+
+        endpoint_url = f"{self.url}/mongo/start_loader"
         if not headers:
             headers = self.headers
 
@@ -29,6 +30,27 @@ class DocloadingAPIs:
             "atlas_url": atlas_url,
             'num_buffer': num_buffer,
             'initial_doc_count': initial_doc_count,
+            'loader_id': loader_id
+        })
+
+        return requests.post(endpoint_url, headers=headers, data=payload)
+
+    def start_crud_on_mongo(self, ip, database_name, collection_name, atlas_url=None, port=27017,
+                            username="", password="", headers=None,
+                            num_buffer=0, loader_id=None):
+        url = self.url + "mongo/start_crud"
+        if not headers:
+            headers = self.headers
+
+        payload = json.dumps({
+            "ip": ip,
+            "port": port,
+            "username": username,
+            "password": password,
+            "database_name": database_name,
+            "collection_name": collection_name,
+            "atlas_url": atlas_url,
+            'num_buffer': num_buffer,
             'loader_id': loader_id
         })
 
@@ -102,9 +124,26 @@ class DocloadingAPIs:
 
     # Dynamo
     def start_dynamo_loader(self, access_key, secret_key, primary_key_field, table_name, region, initial_doc_count,
-                            num_buffer=500,
-                            headers=None, session_token=None, loader_id=None):
-        endpoint_url = "{}dynamo/start_loader".format(self.url)
+                            headers=None):
+        endpoint_url = f"{self.url}/dynamo/start_loader"
+
+        if not headers:
+            headers = self.headers
+
+        payload = json.dumps({
+            "access_key": access_key,
+            "secret_key": secret_key,
+            "primary_key_field": primary_key_field,
+            "table_name": table_name,
+            "region": region,
+            "initial_doc_count": initial_doc_count
+        })
+
+        return requests.post(endpoint_url, headers=headers, data=payload)
+
+    def start_crud_on_dynamo(self, access_key, secret_key, primary_key_field, table_name, region,
+                             num_buffer=0, headers=None, session_token=None, loader_id=None):
+        endpoint_url = "{}dynamo/start_crud".format(self.url)
         if not headers:
             headers = self.headers
 
@@ -115,7 +154,6 @@ class DocloadingAPIs:
             "table_name": table_name,
             "region": region,
             "num_buffer": num_buffer,
-            "initial_doc_count": initial_doc_count,
             "session_token": session_token,
             'loader_id': loader_id
         })
@@ -169,9 +207,30 @@ class DocloadingAPIs:
         return response
 
     # MySQL
-    def start_mysql_loader(self, host, port, username, password, database_name, table_name, table_columns, init_config,
-                           num_buffer=500, initial_doc_count=None, headers=None, loader_id=None):
-        endpoint_url = "{}mysql/start_loader".format(self.url)
+
+    def start_mysql_loader(self, host, port, username, password, database_name, table_name, table_columns, initial_doc_count, headers=None):
+        endpoint_url = f"{self.url}/mysql/start_loader"
+
+        if not headers:
+            headers = self.headers
+
+        payload = json.dumps({
+            "host": host,
+            "port": port,
+            "username": username,
+            "password": password,
+            "database_name": database_name,
+            "table_name": table_name,
+            "table_columns": table_columns,
+            "initial_doc_count": initial_doc_count
+        })
+
+        response = requests.post(endpoint_url, headers=headers, data=payload)
+        return response
+
+    def start_crud_on_mysql(self, host, port, username, password, database_name, table_name, table_columns, init_config,
+                           num_buffer=0, headers=None, loader_id=None):
+        endpoint_url = "{}mysql/start_crud".format(self.url)
 
         if not headers:
             headers = self.headers
@@ -186,7 +245,6 @@ class DocloadingAPIs:
             "table_columns": table_columns,
             "init_config": init_config,
             "num_buffer": num_buffer,
-            "initial_doc_count": initial_doc_count,
             "loader_id": loader_id
         })
 

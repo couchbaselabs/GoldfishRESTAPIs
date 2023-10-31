@@ -39,6 +39,34 @@ def check_request_body(params, checklist):
 @app.route('/mongo/start_loader', methods=['POST'])
 def start_mongo_loader():
     params = request.json
+    checklist = ["ip", "port", "username", "password", "database_name", "collection_name", "initial_doc_count"]
+
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+
+        loader_data = {"docloader": DocLoader(), "status": "running",
+                       "database": params['database_name'], "collection": params['collection_name']}
+
+        if params['atlas_url']:
+            mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
+                                       params['database_name'], params['atlas_url'])
+        else:
+            mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
+                                       params['database_name'])
+
+        thread1 = threading.Thread(target=loader_data['docloader'].setup_initial_load_on_mongo,
+                                   args=(mongo_config, params['collection_name'], params['initial_doc_count']))
+        thread1.start()
+
+        del loader_data['docloader']
+        return jsonify(loader_data), 200
+    else:
+        return params_check
+
+
+@app.route('/mongo/start_crud', methods=['POST'])
+def start_mongo_crud():
+    params = request.json
     checklist = ["ip", "port", "username", "password", "database_name", "collection_name"]
 
     params_check = check_request_body(params, checklist)
@@ -105,8 +133,7 @@ def start_mongo_loader():
                 mongo_config = MongoConfig(params['ip'], params['port'], params['username'], params['password'],
                                            params['database_name'])
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mongo,
-                                       args=(mongo_config, params['collection_name'],  params.get('num_buffer', 500),
-                                             params.get('initial_doc_count', None)))
+                                       args=(mongo_config, params['collection_name'], params.get('num_buffer', 0)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']
@@ -259,6 +286,36 @@ def check_aws_credentials(access_key, secret_key, region, session_token=None):
 @app.route('/dynamo/start_loader', methods=['POST'])
 def start_dynamo_loader():
     params = request.json
+    checklist = ["access_key", "secret_key", "region", "primary_key_field", "table_name", "initial_doc_count"]
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+        resp, err = check_aws_credentials(params['access_key'], params['secret_key'], params['region'])
+        if not resp:
+            rv = {
+                "ERROR": f"{err}",
+                "status": "failed"
+            }
+            return jsonify(rv), 409
+        loader_data = {"docloader": DocLoader(no_of_docs=1), "status": "running",
+                       "database": params['table_name'], "collection": params['table_name']}
+
+        thread1 = threading.Thread(target=loader_data['docloader'].setup_inital_load_on_dynamo_db,
+                                   args=(params['access_key'], params['secret_key'], params['region'],
+                                         params['primary_key_field'],
+                                         params.get('initial_doc_count', None),
+                                         params['table_name'],
+                                         params.get('session_token', None),))
+        thread1.start()
+
+        del loader_data['docloader']
+        return jsonify(loader_data), 200
+    else:
+        return params_check
+
+
+@app.route('/dynamo/start_crud', methods=['POST'])
+def start_dynamo_crud():
+    params = request.json
     checklist = ["access_key", "secret_key", "region", "primary_key_field", "table_name"]
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
@@ -281,7 +338,7 @@ def start_dynamo_loader():
         except:
             pass
 
-        if "loader_id" in params and params["loader_id"] !=None:
+        if "loader_id" in params and params["loader_id"] != None:
             loader_id = params['loader_id']
             result = loader_collection.find_one({"loader_id": params['loader_id']})
             if not result:
@@ -316,7 +373,7 @@ def start_dynamo_loader():
             resp, err = check_aws_credentials(params['access_key'], params['secret_key'], params['region'])
             if not resp:
                 rv = {
-                    "ERROR": f"{resp}",
+                    "ERROR": f"{err}",
                     "status": "failed"
                 }
                 return jsonify(rv), 409
@@ -329,8 +386,7 @@ def start_dynamo_loader():
                                        args=(params['access_key'], params['secret_key'], params['region'],
                                              params['primary_key_field'],
                                              params.get('session_token', None),
-                                             params['table_name'],
-                                             params.get('initial_doc_count', None), params.get('num_buffer', 500)))
+                                             params['table_name'], params.get('num_buffer', 0)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']
@@ -609,6 +665,38 @@ def init_mysql_setup(config, database_name, table_columns, table_name):
 @app.route('/mysql/start_loader', methods=['POST'])
 def start_mysql_loader():
     params = request.json
+    checklist = ["host", "port", "username", "password", "database_name", "table_name", "table_columns", "initial_doc_count"]
+
+    params_check = check_request_body(params, checklist)
+    if params_check[1] != 422:
+
+        loader_data = {"docloader": DocLoader(), "status": "running",
+                       "database": params['database_name'], "collection": params['table_name']}
+
+        mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
+                                   password=params['password'])
+        table_columns = (params['table_columns'])
+        if 'init_config' in params:
+            mysql_obj = init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
+        else:
+            mysql_obj = MySQLSDK(mysql_config)
+            mysql_obj.use_database(params['database_name'])
+
+        thread1 = threading.Thread(target=loader_data['docloader'].setup_inital_load_on_mysql,
+                                   args=(mysql_obj, params['table_name'], table_columns,
+                                         params['initial_doc_count']))
+        thread1.start()
+
+        del loader_data['docloader']
+        return jsonify(loader_data), 200
+
+    else:
+        return params_check
+
+
+@app.route('/mysql/start_crud', methods=['POST'])
+def start_mysql_crud():
+    params = request.json
     checklist = ["host", "port", "username", "password", "database_name", "table_name", "table_columns"]
 
     params_check = check_request_body(params, checklist)
@@ -676,8 +764,7 @@ def start_mysql_loader():
 
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mysql,
                                        args=(mysql_obj, params['table_name'], table_columns,
-                                             params.get('num_buffer', 500),
-                                             params.get('initial_doc_count', None)))
+                                             params.get('num_buffer', 0)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']
@@ -805,6 +892,7 @@ def delete_mysql_table():
     else:
         return params_check
 
+
 @app.route('/mysql/restore', methods=['POST'])
 def restore_mysql_table():
     params = request.json
@@ -814,7 +902,9 @@ def restore_mysql_table():
         mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
                                    password=params['password'])
         try:
-            DocLoader().rebalance_mysql_docs(doc_count=params['doc_count'], table_name=params['table_name'], table_columns=params['table_columns'], config=mysql_config, database_name=params['database_name'])
+            DocLoader().rebalance_mysql_docs(doc_count=params['doc_count'], table_name=params['table_name'],
+                                             table_columns=params['table_columns'], config=mysql_config,
+                                             database_name=params['database_name'])
             rv = {
                 "response": "SUCCESS"
             }

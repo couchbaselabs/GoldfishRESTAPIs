@@ -161,7 +161,7 @@ class DocLoader:
 
     # -- DYNAMODB --
     def load_doc_to_dynamo(self, access_key, secret_key, session_token=None, table=None, region_name=None,
-                           batch_size=1000, max_concurrent_batches=1000):
+                           batch_size=1000, max_concurrent_batches=3):
         """
         :param table: dynamoDb table name
         :param batch_size:
@@ -250,39 +250,51 @@ class DocLoader:
             except Exception as e:
                 logging.info(f"Error : {str(e)}")
 
+    def setup_inital_load_on_dynamo_db(self, access_key, secret_key, region_name, p_key, initial_doc_count, table,
+                                       session_token=None):
+
+        dynamo_object = DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
+                                 table=table, region=region_name)
+
+        initial_doc_count = int(initial_doc_count)
+        current_docs = dynamo_object.get_live_item_count()
+        while current_docs < initial_doc_count:
+            batch_size = self.calculate_optimal_batch_size(current_docs, current_docs, 10000)
+            self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
+                                    session_token=session_token, table=table, region_name=region_name,
+                                    batch_size=batch_size)
+            current_docs = dynamo_object.get_live_item_count()
+
+        while current_docs > initial_doc_count:
+            self.delete_random_in_dynamodb(access_key=access_key, secret_key=secret_key,
+                                           session_token=session_token, region_name=region_name,
+                                           p_key=p_key, table=table)
+            current_docs = dynamo_object.get_live_item_count()
+
     def perform_crud_on_dynamodb(self, access_key, secret_key, region_name, p_key, session_token=None, table=None,
-                                 initial_doc_count=None, num_buffer=500):
+                                 num_buffer=0):
         try:
             dynamo_object = DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
                                      table=table, region=region_name)
-            if initial_doc_count:
-                print(f"starting initial load to meet docs")
-                initial_doc_count = int(initial_doc_count)
-                current_docs = dynamo_object.get_live_item_count()
-                while (not self.stop_dynamo_loader) and current_docs < initial_doc_count:
-                    batch_size = self.calculate_optimal_batch_size(current_docs, current_docs, 10000)
-                    self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
-                                            session_token=session_token, table=table, region_name=region_name,
-                                            batch_size=batch_size)
-                    current_docs = dynamo_object.get_live_item_count()
-
-                while (not self.stop_dynamo_loader) and current_docs > initial_doc_count:
-                    self.delete_random_in_dynamodb(access_key=access_key, secret_key=secret_key,
-                                                   session_token=session_token, region_name=region_name,
-                                                   p_key=p_key, table=table)
-                    current_docs = dynamo_object.get_live_item_count()
 
             start_docs = dynamo_object.get_live_item_count()
+            if num_buffer == 0:
+                max_files = float('inf')
+                min_files = 0
+            else:
+                max_files = start_docs + num_buffer
+                min_files = max(int(start_docs - num_buffer), 0)
+
             while True:
                 while not self.stop_dynamo_loader:
                     current_docs = dynamo_object.get_live_item_count()
                     operation = random.choice(["insert", "delete"])
-                    if operation == "insert" and current_docs < start_docs + num_buffer:
+                    if operation == "insert" and current_docs < max_files:
                         self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
                                                 session_token=session_token, table=table, region_name=region_name,
                                                 batch_size=1)
                         print('document inserted successfully')
-                    elif operation == "delete" and current_docs > start_docs - num_buffer:
+                    elif operation == "delete" and current_docs > min_files:
                         self.delete_random_in_dynamodb(access_key=access_key, secret_key=secret_key,
                                                        session_token=session_token, region_name=region_name,
                                                        p_key=p_key, table=table)
@@ -369,18 +381,7 @@ class DocLoader:
         random_document = mongo_obj.get_random_doc(collection_name)
         mongo_obj.delete_document(collection_name, {"_id": random_document["_id"]})
 
-    def perform_crud_on_mongo(self, mongo_config, collection_name, num_buffer=500, initial_doc_count=None):
-        """
-            Perform CRUD operations on a MongoDB collection.
-
-            Parameters:
-            - mongo_config : Object of class SDKs.MongoDB.MongoConfig
-            - collection_name (str): The name of the MongoDB collection to perform CRUD operations on.
-            - target_num_docs (int): The target number of documents to be inserted into the collection.
-            - time_for_crud_in_mins (int): The total time (in minutes) allowed for performing CRUD operations.
-            - num_buffer (int): The number of documents to buffer before inserting into the database. Default is 500.
-        """
-
+    def setup_initial_load_on_mongo(self, mongo_config, collection_name, initial_doc_count):
         if not isinstance(mongo_config, MongoConfig):
             raise ValueError("config parameter must be an instance of MongoConfig class")
 
@@ -388,26 +389,44 @@ class DocLoader:
 
         if initial_doc_count:
             current_docs = mongo_object.get_current_doc_count(collection_name)
-            while (not self.stop_mongo_loader) and current_docs < initial_doc_count:
+            while current_docs < initial_doc_count:
                 batch_size = self.calculate_optimal_batch_size(initial_doc_count, current_docs, 10000)
                 self.load_doc_to_mongo(mongo_config, collection_name, initial_doc_count - current_docs,
                                        batch_size)
                 current_docs = mongo_object.get_current_doc_count(collection_name)
 
-            while (not self.stop_mongo_loader) and current_docs > initial_doc_count:
+            while current_docs > initial_doc_count:
                 self.delete_random_doc(mongo_object, collection_name)
                 current_docs = mongo_object.get_current_doc_count(collection_name)
 
+    def perform_crud_on_mongo(self, mongo_config, collection_name, num_buffer=0):
+        """
+            Perform CRUD operations on a MongoDB collection.
+
+            Parameters:
+            - mongo_config : Object of class SDKs.MongoDB.MongoConfig
+            - collection_name (str): The name of the MongoDB collection to perform CRUD operations on.
+        """
+        if not isinstance(mongo_config, MongoConfig):
+            raise ValueError("config parameter must be an instance of MongoConfig class")
+
+        mongo_object = MongoSDK(mongo_config)
         start_docs = mongo_object.get_current_doc_count(collection_name)
+        if num_buffer == 0:
+            max_files = float('inf')
+            min_files = 0
+        else:
+            max_files = start_docs + num_buffer
+            min_files = max(int(start_docs - num_buffer), 0)
         while True:
             while not self.stop_mongo_loader:
                 current_docs = mongo_object.get_current_doc_count(collection_name)
                 operation = random.choice(["update", "insert", "delete"])
                 if operation == "update":
                     self.perform_random_update(mongo_config, collection_name)
-                elif operation == "insert" and current_docs < start_docs + num_buffer:
+                elif operation == "insert" and current_docs < max_files:
                     mongo_object.insert_single_document(collection_name, self.generate_docs())
-                elif operation == "delete" and current_docs > start_docs - num_buffer:
+                elif operation == "delete" and current_docs > min_files:
                     self.delete_random_doc(mongo_config, collection_name)
 
     def rebalance_mongo_docs(self, mongo_config, collection_name, num_docs):
@@ -551,9 +570,8 @@ class DocLoader:
     # -- MYSQL --
     def load_data_to_mysql(self, mysql_obj, table_name, table_columns, doc_count, record_values=None):
         for _ in range(doc_count):
-            table_columns_without_id = [col.split()[0] for col in table_columns.split(", ") if
-                                        "AUTO_INCREMENT" not in col]
             if not record_values:
+                doc = self.generate_docs()
                 record_values = [
                     doc["address"],
                     doc["avg_ratings"],
@@ -570,31 +588,36 @@ class DocLoader:
                     doc["type"],
                     doc["url"],
                 ]
+            table_columns_without_id = [col.split()[0] for col in table_columns.split(", ") if
+                                        "AUTO_INCREMENT" not in col]
             mysql_obj.insert_record_using_columns(table_name, table_columns_without_id, record_values)
 
-    def perform_crud_on_mysql(self, mysql_obj, table_name, table_columns, num_buffer=500, initial_doc_count=None):
-        if inital_doc_count:
-            current_doc_count = mysql_obj.get_total_records_count(table_name)
-            if current_doc_count > initial_doc_count:
-                self.load_data_to_mysql(mysql_obj, table_name, table_name, table_columns, inital_doc_count)
-            else:
-                for _ in range(initial_doc_count - current_doc_count):
-                    record_id = mysql_obj.get_random_record_id(table_name)
-                    if record_id is not None:
-                        try:
-                            mysql_obj.delete_record(table_name, f"id={record_id}")
-                        except Exception as e:
-                            print(f"Error during delete operation: {e}")
+    def setup_inital_load_on_mysql(self, mysql_obj, table_name, table_columns, initial_doc_count):
+        current_doc_count = mysql_obj.get_total_records_count(table_name)
+        if current_doc_count < initial_doc_count:
+            self.load_data_to_mysql(mysql_obj, table_name, table_columns, int(initial_doc_count-current_doc_count))
+        else:
+            for _ in range(initial_doc_count - current_doc_count):
+                record_id = mysql_obj.get_random_record_id(table_name)
+                if record_id is not None:
+                    try:
+                        mysql_obj.delete_record(table_name, f"id={record_id}")
+                    except Exception as e:
+                        print(f"Error during delete operation: {e}")
+
+    def perform_crud_on_mysql(self, mysql_obj, table_name, table_columns, num_buffer=0):
+
+        start_docs = mysql_obj.get_total_records_count(table_name)
+        if num_buffer == 0:
+            max_files = float('inf')
+            min_files = 0
+        else:
+            max_files = start_docs + num_buffer
+            min_files = max(int(start_docs - num_buffer), 0)
 
         while True:
-            start_count = mysql_obj.get_total_records_count(table_name)
-
-            min_files = min(0, start_count - num_buffer)
-            max_files = start_count + num_buffer
-
             while not self.stop_mysql_loader:
                 operation = random.choice(["create", "update", "delete"])
-
                 current_records_count = mysql_obj.get_total_records_count(table_name)
 
                 if operation == "create" and max_files > current_records_count:
