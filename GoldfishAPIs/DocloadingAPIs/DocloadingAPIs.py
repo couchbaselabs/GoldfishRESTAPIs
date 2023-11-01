@@ -16,7 +16,7 @@ class DocloadingAPIs:
                            username="", password="", headers=None,
                            num_buffer=0, initial_doc_count=None, loader_id=None):
 
-        endpoint_url = f"{self.url}/mongo/start_loader"
+        endpoint_url = self.url + "mongo/start_loader"
         if not headers:
             headers = self.headers
 
@@ -68,8 +68,8 @@ class DocloadingAPIs:
 
         return requests.post(url, headers=headers, data=payload)
 
-    def get_mongo_doc_count(self, headers, ip, database_name, collection_name, username=None, password=None,
-                            atlas_url=None, port=27017):
+    def get_mongo_doc_count(self, ip, database_name, collection_name, username=None, password=None,
+                            atlas_url=None, port=27017, headers=None):
         url = self.url + "mongo/start_loader"
         if not headers:
             headers = self.headers
