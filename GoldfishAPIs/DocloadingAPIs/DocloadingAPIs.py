@@ -125,7 +125,7 @@ class DocloadingAPIs:
     # Dynamo
     def start_dynamo_loader(self, access_key, secret_key, primary_key_field, table_name, region, initial_doc_count,
                             headers=None):
-        endpoint_url = f"{self.url}/dynamo/start_loader"
+        endpoint_url = self.url + "dynamo/start_loader"
 
         if not headers:
             headers = self.headers
@@ -209,7 +209,7 @@ class DocloadingAPIs:
     # MySQL
 
     def start_mysql_loader(self, host, port, username, password, database_name, table_name, table_columns, initial_doc_count, headers=None):
-        endpoint_url = f"{self.url}/mysql/start_loader"
+        endpoint_url = self.url + "mysql/start_loader"
 
         if not headers:
             headers = self.headers
