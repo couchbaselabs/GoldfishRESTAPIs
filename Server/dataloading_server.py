@@ -304,7 +304,7 @@ def start_dynamo_loader():
                                          params['primary_key_field'],
                                          params.get('initial_doc_count', None),
                                          params['table_name'],
-                                         params.get('session_token', None),))
+                                         params.get('session_token', None), params.get("add_id_key", False)))
         thread1.start()
 
         del loader_data['docloader']
@@ -386,7 +386,7 @@ def start_dynamo_crud():
                                        args=(params['access_key'], params['secret_key'], params['region'],
                                              params['primary_key_field'],
                                              params.get('session_token', None),
-                                             params['table_name'], params.get('num_buffer', 0)))
+                                             params['table_name'], params.get('num_buffer', 0), params.get("add_id_key", False)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']

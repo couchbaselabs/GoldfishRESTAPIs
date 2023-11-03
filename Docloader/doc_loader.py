@@ -12,6 +12,7 @@ import random
 import string
 import time
 from concurrent.futures import ThreadPoolExecutor
+import uuid
 
 import Docloader.docgen_template as template
 import SDKs.DynamoDB.dynamo_sdk as dynamoSdk
@@ -161,7 +162,7 @@ class DocLoader:
 
     # -- DYNAMODB --
     def load_doc_to_dynamo(self, access_key, secret_key, session_token=None, table=None, region_name=None,
-                           batch_size=1000, max_concurrent_batches=3):
+                           batch_size=1000, max_concurrent_batches=3, add_id_key=False):
         """
         :param table: dynamoDb table name
         :param batch_size:
@@ -194,6 +195,10 @@ class DocLoader:
                             padding_size = max(len(str(document).encode("utf-8")) -
                                                self.document_size, 0)
                             document['padding'] = document['padding'][:-padding_size]
+
+                        # if you want id field
+                        if add_id_key:
+                            document['id'] = str(uuid.uuid4())
                         dynamo_obj.write_batch([document])  # Write each document separately
                 except Exception as err:
                     print(f"An error occurred: {err}")
@@ -251,7 +256,7 @@ class DocLoader:
                 logging.info(f"Error : {str(e)}")
 
     def setup_inital_load_on_dynamo_db(self, access_key, secret_key, region_name, p_key, initial_doc_count, table,
-                                       session_token=None):
+                                       session_token=None, add_id_key=False):
 
         dynamo_object = DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
                                  table=table, region=region_name)
@@ -262,7 +267,7 @@ class DocLoader:
             batch_size = self.calculate_optimal_batch_size(current_docs, current_docs, 10000)
             self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
                                     session_token=session_token, table=table, region_name=region_name,
-                                    batch_size=batch_size)
+                                    batch_size=batch_size, add_id_key=add_id_key)
             current_docs = dynamo_object.get_live_item_count()
 
         while current_docs > initial_doc_count:
@@ -272,7 +277,7 @@ class DocLoader:
             current_docs = dynamo_object.get_live_item_count()
 
     def perform_crud_on_dynamodb(self, access_key, secret_key, region_name, p_key, session_token=None, table=None,
-                                 num_buffer=0):
+                                 num_buffer=0, add_id_key=False):
         try:
             dynamo_object = DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
                                      table=table, region=region_name)
@@ -292,7 +297,7 @@ class DocLoader:
                     if operation == "insert" and current_docs < max_files:
                         self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
                                                 session_token=session_token, table=table, region_name=region_name,
-                                                batch_size=1)
+                                                batch_size=1, add_id_key=add_id_key)
                         print('document inserted successfully')
                     elif operation == "delete" and current_docs > min_files:
                         self.delete_random_in_dynamodb(access_key=access_key, secret_key=secret_key,

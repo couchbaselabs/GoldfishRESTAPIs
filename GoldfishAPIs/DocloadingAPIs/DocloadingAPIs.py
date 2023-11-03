@@ -87,7 +87,7 @@ class DocloadingAPIs:
         response = requests.get(url, headers=headers, data=payload)
         return response
 
-    def drop_mongo_database(self, ip, database_name, collection_name, username=None, password=None, headers=None,
+    def drop_mongo_database(self, ip, database_name, collection_name, atlas_url=None, username=None, password=None, headers=None,
                             port=27017):
         url = self.url + "mongo/delete_database"
         if not headers:
@@ -100,11 +100,12 @@ class DocloadingAPIs:
             "password": password,
             "database_name": database_name,
             "collection_name": collection_name,
+            "atlas_url": atlas_url
         })
 
         return requests.delete(url, headers=headers, data=payload)
 
-    def delete_mongo_collection(self, ip, port, database_name, collection_name, username=None, password=None,
+    def delete_mongo_collection(self, ip, port, database_name, collection_name, atlas_url=None, username=None, password=None,
                                 headers=None):
         url = self.url + "mongo/delete_collection"
 
@@ -118,13 +119,14 @@ class DocloadingAPIs:
             "password": password,
             "database_name": database_name,
             "collection_name": collection_name,
+            "atlas_url": atlas_url
         })
 
         return requests.delete(url, headers=headers, data=payload)
 
     # Dynamo
     def start_dynamo_loader(self, access_key, secret_key, primary_key_field, table_name, region, initial_doc_count,
-                            headers=None):
+                            add_id_key=False, headers=None):
         endpoint_url = self.url + "dynamo/start_loader"
 
         if not headers:
@@ -136,7 +138,8 @@ class DocloadingAPIs:
             "primary_key_field": primary_key_field,
             "table_name": table_name,
             "region": region,
-            "initial_doc_count": initial_doc_count
+            "initial_doc_count": initial_doc_count,
+            "add_id_key": add_id_key
         })
 
         return requests.post(endpoint_url, headers=headers, data=payload)
