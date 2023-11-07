@@ -68,7 +68,7 @@ class DocloadingAPIs:
 
     def get_mongo_doc_count(self, ip, database_name, collection_name, username=None, password=None,
                             atlas_url=None, port=27017, headers=None):
-        url = self.url + "mongo/start_loader"
+        url = self.url + "mongo/count"
         if not headers:
             headers = self.headers
 
