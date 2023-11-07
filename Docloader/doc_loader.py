@@ -1,6 +1,6 @@
 """
 Docloader to create and upload document to various sources for goldFish
-Sources include mongoDB, dynamoDB, cassandra, etc..
+Sources include mongoDB, dynamoDB, cassandra, etc.
 """
 import concurrent
 import concurrent.futures
