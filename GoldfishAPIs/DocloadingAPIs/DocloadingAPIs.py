@@ -13,8 +13,7 @@ class DocloadingAPIs:
 
     # mongo
     def start_mongo_loader(self, ip, database_name, collection_name, atlas_url=None, port=27017,
-                           username="", password="", headers=None,
-                           num_buffer=0, initial_doc_count=None, loader_id=None):
+                           username="", password="", headers=None, initial_doc_count=None, loader_id=None):
 
         endpoint_url = self.url + "mongo/start_loader"
         if not headers:
@@ -28,7 +27,6 @@ class DocloadingAPIs:
             "database_name": database_name,
             "collection_name": collection_name,
             "atlas_url": atlas_url,
-            'num_buffer': num_buffer,
             'initial_doc_count': initial_doc_count,
             'loader_id': loader_id
         })
@@ -164,7 +162,7 @@ class DocloadingAPIs:
         response = requests.post(endpoint_url, headers=headers, data=payload)
         return response
 
-    def stop_dynamo_loader(self, loader_id, headers=None):
+    def stop_crud_on_dynamo(self, loader_id, headers=None):
         endpoint_url = "{}dynamo/stop_loader".format(self.url)
 
         if not headers:
@@ -254,7 +252,7 @@ class DocloadingAPIs:
         response = requests.post(endpoint_url, headers=headers, data=payload)
         return response
 
-    def stop_mysql_loader(self, loader_id, headers=None):
+    def stop_crud_on_mysql(self, loader_id, headers=None):
         endpoint_url = "{}mysql/stop_loader".format(self.url)
 
         if not headers:
