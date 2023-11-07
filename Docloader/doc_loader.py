@@ -262,9 +262,9 @@ class DocLoader:
                                  table=table, region=region_name)
 
         initial_doc_count = int(initial_doc_count)
-        current_docs = dynamo_object.get_live_item_count()
+        current_docs = int(dynamo_object.get_live_item_count())
         while current_docs < initial_doc_count:
-            batch_size = self.calculate_optimal_batch_size(current_docs, current_docs, 10000)
+            batch_size = self.calculate_optimal_batch_size(initial_doc_count, current_docs, 10000)
             self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
                                     session_token=session_token, table=table, region_name=region_name,
                                     batch_size=batch_size, add_id_key=add_id_key)
@@ -393,7 +393,8 @@ class DocLoader:
         mongo_object = MongoSDK(mongo_config)
 
         if initial_doc_count:
-            current_docs = mongo_object.get_current_doc_count(collection_name)
+            initial_doc_count = int(initial_doc_count)
+            current_docs = int(mongo_object.get_current_doc_count(collection_name))
             while current_docs < initial_doc_count:
                 batch_size = self.calculate_optimal_batch_size(initial_doc_count, current_docs, 10000)
                 self.load_doc_to_mongo(mongo_config, collection_name, initial_doc_count - current_docs,

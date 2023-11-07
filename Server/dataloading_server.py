@@ -43,7 +43,6 @@ def start_mongo_loader():
 
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
-
         loader_data = {"docloader": DocLoader(), "status": "running",
                        "database": params['database_name'], "collection": params['collection_name']}
 
@@ -296,6 +295,13 @@ def start_dynamo_loader():
                 "status": "failed"
             }
             return jsonify(rv), 409
+
+        try:
+            dynamo_obj = DynamoDb(params.get('url', None), params['table_name'], params['region'])
+            init_table(dynamo_obj, params['table_name'], params['primary_key_field'])
+        except:
+            pass
+
         loader_data = {"docloader": DocLoader(no_of_docs=1), "status": "running",
                        "database": params['table_name'], "collection": params['table_name']}
 
