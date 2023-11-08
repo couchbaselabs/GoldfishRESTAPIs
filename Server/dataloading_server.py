@@ -267,7 +267,7 @@ def init_table(dynamo_object, table_name, primary_key):
                                    {'ReadCapacityUnits': 10000, 'WriteCapacityUnits': 10000})
         dynamo_object.enable_image_streaming()
     except Exception as err:
-        raise Exception(err)
+        print(err)
 
 
 def check_aws_credentials(access_key, secret_key, region, session_token=None):
