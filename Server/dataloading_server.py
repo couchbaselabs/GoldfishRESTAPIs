@@ -260,11 +260,14 @@ def drop_mongo_collection():
 
 # -- Dynamo --`
 def init_table(dynamo_object, table_name, primary_key):
-    KeySchema = {f'{primary_key}': 'HASH', }  # Partition key
-    AttributeDefinitions = {f'{primary_key}': 'S', }
-    dynamo_object.create_table(table_name, KeySchema, AttributeDefinitions,
-                               {'ReadCapacityUnits': 10000, 'WriteCapacityUnits': 10000})
-    dynamo_object.enable_image_streaming()
+    try:
+        KeySchema = {f'{primary_key}': 'HASH', }  # Partition key
+        AttributeDefinitions = {f'{primary_key}': 'S', }
+        dynamo_object.create_table(table_name, KeySchema, AttributeDefinitions,
+                                   {'ReadCapacityUnits': 10000, 'WriteCapacityUnits': 10000})
+        dynamo_object.enable_image_streaming()
+    except Exception as err:
+        raise Exception(err)
 
 
 def check_aws_credentials(access_key, secret_key, region, session_token=None):
@@ -297,7 +300,8 @@ def start_dynamo_loader():
             return jsonify(rv), 409
 
         try:
-            dynamo_obj = DynamoDb(params.get('url', None), params['table_name'], params['region'])
+            dynamo_obj = DynamoDb(params['access_key'], params['secret_key'], params['region'],
+                                  params.get("session_token", None))
             init_table(dynamo_obj, params['table_name'], params['primary_key_field'])
         except:
             pass
@@ -339,7 +343,8 @@ def start_dynamo_crud():
                 return jsonify(rv), 409
 
         try:
-            dynamo_obj = DynamoDb(params.get('url', None), params['table_name'], params['region'])
+            dynamo_obj = DynamoDb(params['access_key'], params['secret_key'], params['region'],
+                                  params.get("session_token", None))
             init_table(dynamo_obj, params['table_name'], params['primary_key_field'])
         except:
             pass
@@ -392,7 +397,8 @@ def start_dynamo_crud():
                                        args=(params['access_key'], params['secret_key'], params['region'],
                                              params['primary_key_field'],
                                              params.get('session_token', None),
-                                             params['table_name'], params.get('num_buffer', 0), params.get("add_id_key", False)))
+                                             params['table_name'], params.get('num_buffer', 0),
+                                             params.get("add_id_key", False)))
             thread1.start()
 
             loaderIdvsDocobject[loader_id] = loader_data['docloader']
@@ -671,7 +677,8 @@ def init_mysql_setup(config, database_name, table_columns, table_name):
 @app.route('/mysql/start_loader', methods=['POST'])
 def start_mysql_loader():
     params = request.json
-    checklist = ["host", "port", "username", "password", "database_name", "table_name", "table_columns", "initial_doc_count"]
+    checklist = ["host", "port", "username", "password", "database_name", "table_name", "table_columns",
+                 "initial_doc_count"]
 
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:

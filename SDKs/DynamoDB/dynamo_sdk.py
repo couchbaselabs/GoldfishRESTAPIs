@@ -92,6 +92,7 @@ class DynamoDb:
         try:
             self.table = self.dyn_resource.create_table(**table_params)
             self.table.wait_until_exists()
+            self.table_name = table_name
             return self.table
         except ClientError as err:
             logging.error("Couldn't create table %s. Here's why: %s: %s", table_name,
@@ -351,6 +352,6 @@ class DynamoDb:
                         'StreamViewType': StreamViewType
                     }
                 )
-                print(f"DynamoDB Stream enabled for table {table_name}")
+                print(f"DynamoDB Stream enabled for table {self.table_name} or {table_name}")
         except Exception as e:
             print(f"Error enabling DynamoDB Stream: {e}")
