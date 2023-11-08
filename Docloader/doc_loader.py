@@ -270,11 +270,15 @@ class DocLoader:
                                     batch_size=batch_size, add_id_key=add_id_key)
             current_docs = dynamo_object.get_live_item_count()
 
+        last_update_time = time.time()
         while current_docs > initial_doc_count:
             self.delete_random_in_dynamodb(access_key=access_key, secret_key=secret_key,
                                            session_token=session_token, region_name=region_name,
                                            p_key=p_key, table=table)
-            current_docs = dynamo_object.get_live_item_count()
+            current_time = time.time()
+            if current_time - last_update_time >= 20:
+                current_docs = dynamo_object.get_live_item_count()
+                last_update_time = current_time
 
     def perform_crud_on_dynamodb(self, access_key, secret_key, region_name, p_key, session_token=None, table=None,
                                  num_buffer=0, add_id_key=False):
@@ -402,7 +406,7 @@ class DocLoader:
                 current_docs = mongo_object.get_current_doc_count(collection_name)
 
             while current_docs > initial_doc_count:
-                self.delete_random_doc(mongo_object, collection_name)
+                self.delete_random_doc(mongo_config, collection_name)
                 current_docs = mongo_object.get_current_doc_count(collection_name)
 
     def perform_crud_on_mongo(self, mongo_config, collection_name, num_buffer=0):
