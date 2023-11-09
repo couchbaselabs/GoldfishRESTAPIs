@@ -13,7 +13,8 @@ class DocloadingAPIs:
 
     # mongo
     def start_mongo_loader(self, ip, database_name, collection_name, atlas_url=None, port=27017,
-                           username="", password="", headers=None, initial_doc_count=None, loader_id=None):
+                           username="", password="", document_size=1024, headers=None, initial_doc_count=None,
+                           loader_id=None):
 
         endpoint_url = self.url + "mongo/start_loader"
         if not headers:
@@ -28,13 +29,14 @@ class DocloadingAPIs:
             "collection_name": collection_name,
             "atlas_url": atlas_url,
             'initial_doc_count': initial_doc_count,
-            'loader_id': loader_id
+            'document_size': document_size,
+            'loader_id': loader_id,
         })
 
         return requests.post(endpoint_url, headers=headers, data=payload)
 
     def start_crud_on_mongo(self, ip, database_name, collection_name, atlas_url=None, port=27017,
-                            username="", password="", headers=None,
+                            username="", password="", document_size=1024, headers=None,
                             num_buffer=0, loader_id=None):
         url = self.url + "mongo/start_crud"
         if not headers:
@@ -49,6 +51,7 @@ class DocloadingAPIs:
             "collection_name": collection_name,
             "atlas_url": atlas_url,
             'num_buffer': num_buffer,
+            'document_size': document_size,
             'loader_id': loader_id
         })
 
@@ -85,7 +88,8 @@ class DocloadingAPIs:
         response = requests.get(url, headers=headers, data=payload)
         return response
 
-    def drop_mongo_database(self, ip, database_name, collection_name, atlas_url=None, username=None, password=None, headers=None,
+    def drop_mongo_database(self, ip, database_name, collection_name, atlas_url=None, username=None, password=None,
+                            headers=None,
                             port=27017):
         url = self.url + "mongo/delete_database"
         if not headers:
@@ -103,7 +107,8 @@ class DocloadingAPIs:
 
         return requests.delete(url, headers=headers, data=payload)
 
-    def delete_mongo_collection(self, ip, port, database_name, collection_name, atlas_url=None, username=None, password=None,
+    def delete_mongo_collection(self, ip, port, database_name, collection_name, atlas_url=None, username=None,
+                                password=None,
                                 headers=None):
         url = self.url + "mongo/delete_collection"
 
@@ -124,7 +129,7 @@ class DocloadingAPIs:
 
     # Dynamo
     def start_dynamo_loader(self, access_key, secret_key, primary_key_field, table_name, region, initial_doc_count,
-                            add_id_key=False, headers=None):
+                            document_size=1024, add_id_key=False, headers=None):
         endpoint_url = self.url + "dynamo/start_loader"
 
         if not headers:
@@ -137,13 +142,14 @@ class DocloadingAPIs:
             "table_name": table_name,
             "region": region,
             "initial_doc_count": initial_doc_count,
+            "document_size": document_size,
             "add_id_key": add_id_key
         })
 
         return requests.post(endpoint_url, headers=headers, data=payload)
 
     def start_crud_on_dynamo(self, access_key, secret_key, primary_key_field, table_name, region,
-                             num_buffer=0, headers=None, session_token=None, loader_id=None):
+                             num_buffer=0, document_size=1024, headers=None, session_token=None, loader_id=None):
         endpoint_url = "{}dynamo/start_crud".format(self.url)
         if not headers:
             headers = self.headers
@@ -156,6 +162,7 @@ class DocloadingAPIs:
             "region": region,
             "num_buffer": num_buffer,
             "session_token": session_token,
+            "document_size": document_size,
             'loader_id': loader_id
         })
 
@@ -209,7 +216,8 @@ class DocloadingAPIs:
 
     # MySQL
 
-    def start_mysql_loader(self, host, port, username, password, database_name, table_name, table_columns, initial_doc_count, headers=None):
+    def start_mysql_loader(self, host, port, username, password, database_name, table_name, table_columns,
+                           initial_doc_count, document_size=1024, headers=None):
         endpoint_url = self.url + "mysql/start_loader"
 
         if not headers:
@@ -223,6 +231,7 @@ class DocloadingAPIs:
             "database_name": database_name,
             "table_name": table_name,
             "table_columns": table_columns,
+            "document_size": document_size,
             "initial_doc_count": initial_doc_count
         })
 
@@ -230,7 +239,7 @@ class DocloadingAPIs:
         return response
 
     def start_crud_on_mysql(self, host, port, username, password, database_name, table_name, table_columns, init_config,
-                           num_buffer=0, headers=None, loader_id=None):
+                            num_buffer=0, document_size=1024, headers=None, loader_id=None):
         endpoint_url = "{}mysql/start_crud".format(self.url)
 
         if not headers:
@@ -246,6 +255,7 @@ class DocloadingAPIs:
             "table_columns": table_columns,
             "init_config": init_config,
             "num_buffer": num_buffer,
+            "document_size": document_size,
             "loader_id": loader_id
         })
 

@@ -43,7 +43,7 @@ def start_mongo_loader():
 
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
-        loader_data = {"docloader": DocLoader(), "status": "running",
+        loader_data = {"docloader": DocLoader(document_size=params.get("document_size", 1024)), "status": "running",
                        "database": params['database_name'], "collection": params['collection_name']}
 
         if params['atlas_url']:
@@ -122,7 +122,7 @@ def start_mongo_crud():
             # Start a new loader
             loader_id = str(uuid.uuid4())
 
-            loader_data = {"loader_id": loader_id, "docloader": DocLoader(), "status": "running",
+            loader_data = {"loader_id": loader_id, "docloader": DocLoader(document_size=params.get("document_size", 1024)), "status": "running",
                            "database": params['database_name'], "collection": params['collection_name']}
 
             if params['atlas_url']:
@@ -306,7 +306,7 @@ def start_dynamo_loader():
         except:
             pass
 
-        loader_data = {"docloader": DocLoader(no_of_docs=1), "status": "running",
+        loader_data = {"docloader": DocLoader(document_size=params.get("document_size", 1024), no_of_docs=1), "status": "running",
                        "database": params['table_name'], "collection": params['table_name']}
 
         thread1 = threading.Thread(target=loader_data['docloader'].setup_inital_load_on_dynamo_db,
@@ -390,7 +390,7 @@ def start_dynamo_crud():
                 return jsonify(rv), 409
             loader_id = str(uuid.uuid4())
 
-            loader_data = {"loader_id": loader_id, "docloader": DocLoader(no_of_docs=1), "status": "running",
+            loader_data = {"loader_id": loader_id, "docloader": DocLoader(document_size=params.get("document_size", 1024), no_of_docs=1), "status": "running",
                            "database": params['table_name'], "collection": params['table_name']}
 
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_dynamodb,
@@ -539,7 +539,7 @@ def start_s3_loader():
         else:
             loader_id = str(uuid.uuid4())
 
-            loader_data = {"loader_id": loader_id, "docloader": DocLoader(), "status": "running",
+            loader_data = {"loader_id": loader_id, "docloader": DocLoader(document_size=params.get("document_size", 1024)), "status": "running",
                            "database": "", "collection": ""}
 
             s3_config = s3Config(params['access_key'], params['secret_key'], params['region'], params['num_buckets'],
@@ -649,7 +649,7 @@ def restore_s3_bucket():
                                  params.get('file_size', 1024), params.get('max_file_size', 10240),
                                  params.get('file_format', ['json', 'csv', 'tsv']))
 
-            DocLoader().restore_s3(
+            DocLoader(document_size=params.get("document_size", 1024)).restore_s3(
                 s3SDK(params['access_key'], params['secret_key'], params.get('session_token', None)),
                 params['bucket_name'], s3_config)
             rv = {
@@ -683,7 +683,7 @@ def start_mysql_loader():
     params_check = check_request_body(params, checklist)
     if params_check[1] != 422:
 
-        loader_data = {"docloader": DocLoader(), "status": "running",
+        loader_data = {"docloader": DocLoader(document_size=params.get("document_size", 1024)), "status": "running",
                        "database": params['database_name'], "collection": params['table_name']}
 
         mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
@@ -764,7 +764,7 @@ def start_mysql_crud():
         else:
             loader_id = str(uuid.uuid4())
 
-            loader_data = {"loader_id": loader_id, "docloader": DocLoader(), "status": "running",
+            loader_data = {"loader_id": loader_id, "docloader": DocLoader(document_size=params.get("document_size", 1024)), "status": "running",
                            "database": params['database_name'], "collection": params['table_name']}
 
             mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
@@ -915,7 +915,7 @@ def restore_mysql_table():
         mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
                                    password=params['password'])
         try:
-            DocLoader().rebalance_mysql_docs(doc_count=params['doc_count'], table_name=params['table_name'],
+            DocLoader(document_size=params.get("document_size", 1024)).rebalance_mysql_docs(doc_count=params['doc_count'], table_name=params['table_name'],
                                              table_columns=params['table_columns'], config=mysql_config,
                                              database_name=params['database_name'])
             rv = {
