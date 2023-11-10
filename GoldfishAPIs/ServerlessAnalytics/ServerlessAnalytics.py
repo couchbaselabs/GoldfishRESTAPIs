@@ -223,7 +223,7 @@ class GoldfishAPI(GoldfishRequests):
                                             headers=self.basic_headers)
         return resp
 
-    def create_api_keys(self, tenant_id, project_id, instance_id, headers=None):
+    def create_api_keys(self, tenant_id, project_id, instance_id, headers=None, skip_jwt_retry=False):
         """"
             Create an analytics apikey
 
@@ -234,6 +234,13 @@ class GoldfishAPI(GoldfishRequests):
         """
         url = "{}/v2/organizations/{}/projects/{}/instance/{}/apikeys".format(self.internal_url, tenant_id,
                                                                            project_id, instance_id)
+        if skip_jwt_retry:
+            if not headers:
+                headers = self.basic_headers
+            resp = self._urllib_request(url, method="POST",
+                                        headers=headers)
+            return resp
+
         if headers:
             resp = self.do_internal_request(url, method="POST",
                                             headers=headers)
