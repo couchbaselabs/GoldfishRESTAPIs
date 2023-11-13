@@ -238,8 +238,10 @@ class DocloadingAPIs:
         response = requests.post(endpoint_url, headers=headers, data=payload)
         return response
 
-    def start_crud_on_mysql(self, host, port, username, password, database_name, table_name, table_columns, init_config,
-                            num_buffer=0, document_size=1024, headers=None, loader_id=None):
+    def start_crud_on_mysql(
+            self, host, port, username, password, database_name, table_name,
+            table_columns, num_buffer=0, document_size=1024, headers=None,
+            loader_id=None):
         endpoint_url = "{}mysql/start_crud".format(self.url)
 
         if not headers:
@@ -253,7 +255,6 @@ class DocloadingAPIs:
             "database_name": database_name,
             "table_name": table_name,
             "table_columns": table_columns,
-            "init_config": init_config,
             "num_buffer": num_buffer,
             "document_size": document_size,
             "loader_id": loader_id

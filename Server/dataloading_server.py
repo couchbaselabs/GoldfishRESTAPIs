@@ -667,15 +667,16 @@ def restore_s3_bucket():
 
 
 def init_mysql_setup(config, database_name, table_columns, table_name):
+    mysql = MySQLSDK(config)
     try:
-        mysql = MySQLSDK(config)
         mysql.create_database(database_name)
         mysql.use_database(database_name)
         mysql.create_table(table_name, table_columns)
-        return mysql
     except Exception as e:
         print(str(e))
 
+    mysql.use_database(database_name)
+    return mysql
 
 @app.route('/mysql/start_loader', methods=['POST'])
 def start_mysql_loader():
@@ -693,9 +694,8 @@ def start_mysql_loader():
                                    password=params['password'])
         table_columns = (params['table_columns'])
 
-        init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
+        mysql_obj = init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
 
-        mysql_obj = MySQLSDK(mysql_config)
         mysql_obj.use_database(params['database_name'])
 
         thread1 = threading.Thread(target=loader_data['docloader'].setup_inital_load_on_mysql,
@@ -731,14 +731,14 @@ def start_mysql_crud():
                 }
                 return jsonify(rv), 409
 
-        if "loader_id" in params and not params["loader_id"]:
+        if "loader_id" in params and params["loader_id"]:
             result = loader_collection.find_one({"loader_id": params['loader_id']})
             if not result:
                 rv = {
                     "ERROR": f"No loader found for loader_id {params['loader_id']}",
                     "status": "failed"
                 }
-                return jsonify(rv), 409
+                return jsonify(rv), 404
             loader_id = params['loader_id']
             loader_obj = loaderIdvsDocobject[loader_id]
             loader_status = loader_obj.is_loader_running(db="mysql")
@@ -773,9 +773,7 @@ def start_mysql_crud():
                                        password=params['password'])
             table_columns = (params['table_columns'])
 
-            init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
-
-            mysql_obj = MySQLSDK(mysql_config)
+            mysql_obj = init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
 
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mysql,
                                        args=(mysql_obj, params['table_name'], table_columns,
