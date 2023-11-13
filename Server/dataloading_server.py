@@ -303,8 +303,8 @@ def start_dynamo_loader():
             dynamo_obj = DynamoDb(params['access_key'], params['secret_key'], params['region'],
                                   params.get("session_token", None))
             init_table(dynamo_obj, params['table_name'], params['primary_key_field'])
-        except:
-            pass
+        except Exception as err:
+            print(str(err))
 
         loader_data = {"docloader": DocLoader(document_size=params.get("document_size", 1024), no_of_docs=1), "status": "running",
                        "database": params['table_name'], "collection": params['table_name']}
@@ -543,7 +543,7 @@ def start_s3_loader():
                            "database": "", "collection": ""}
 
             s3_config = s3Config(params['access_key'], params['secret_key'], params['region'], params['num_buckets'],
-                                 params['depth_level'], pxarams['num_folders_per_level'],
+                                 params['depth_level'], params['num_folders_per_level'],
                                  params['num_files_per_level'], params.get('session_token', None),
                                  params.get('file_size', 1024), params.get('max_file_size', 10240),
                                  params.get('file_format', ['json', 'csv', 'tsv']))
@@ -667,11 +667,14 @@ def restore_s3_bucket():
 
 
 def init_mysql_setup(config, database_name, table_columns, table_name):
-    mysql = MySQLSDK(config)
-    mysql.create_database(database_name)
-    mysql.use_database(database_name)
-    mysql.create_table(table_name, table_columns)
-    return mysql
+    try:
+        mysql = MySQLSDK(config)
+        mysql.create_database(database_name)
+        mysql.use_database(database_name)
+        mysql.create_table(table_name, table_columns)
+        return mysql
+    except Exception as e:
+        print(str(e))
 
 
 @app.route('/mysql/start_loader', methods=['POST'])
@@ -689,11 +692,11 @@ def start_mysql_loader():
         mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
                                    password=params['password'])
         table_columns = (params['table_columns'])
-        if 'init_config' in params:
-            mysql_obj = init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
-        else:
-            mysql_obj = MySQLSDK(mysql_config)
-            mysql_obj.use_database(params['database_name'])
+
+        init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
+
+        mysql_obj = MySQLSDK(mysql_config)
+        mysql_obj.use_database(params['database_name'])
 
         thread1 = threading.Thread(target=loader_data['docloader'].setup_inital_load_on_mysql,
                                    args=(mysql_obj, params['table_name'], table_columns,
@@ -729,7 +732,6 @@ def start_mysql_crud():
                 return jsonify(rv), 409
 
         if "loader_id" in params and not params["loader_id"]:
-            params['init_config'] = False
             result = loader_collection.find_one({"loader_id": params['loader_id']})
             if not result:
                 rv = {
@@ -770,10 +772,10 @@ def start_mysql_crud():
             mysql_config = MySQLConfig(host=params['host'], port=params['port'], username=params['username'],
                                        password=params['password'])
             table_columns = (params['table_columns'])
-            if params['init_config']:
-                mysql_obj = init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
-            else:
-                mysql_obj = MySQLSDK(mysql_config)
+
+            init_mysql_setup(mysql_config, params['database_name'], table_columns, params['table_name'])
+
+            mysql_obj = MySQLSDK(mysql_config)
 
             thread1 = threading.Thread(target=loader_data['docloader'].perform_crud_on_mysql,
                                        args=(mysql_obj, params['table_name'], table_columns,

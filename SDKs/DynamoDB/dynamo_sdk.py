@@ -98,7 +98,8 @@ class DynamoDb:
             logging.error("Couldn't create table %s. Here's why: %s: %s", table_name,
                           err.response['Error']['Code'], err.response['Error']['Message'])
             raise
-
+        except Exception as err:
+            raise err
     def delete_table(self):
         """
         Delete the table present in dynamoDB object
