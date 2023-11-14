@@ -244,7 +244,10 @@ class DocLoader:
                                   region_name=None):
         dynamo_obj = dynamoSdk.DynamoDb(access_key=access_key, secret_key=secret_key, session_token=session_token,
                                         table=table, region=region_name)
-        response = dynamo_obj.scan_table()
+        expression_attribute_names = {'#key_attr': p_key}
+        response = dynamo_obj.scan_table(projection_expression='#key_attr',
+                                         expression_attribute_names=expression_attribute_names)
+
         if len(response) > 0:
             random_item = random.choice(response)
             try:
@@ -265,20 +268,17 @@ class DocLoader:
         current_docs = int(dynamo_object.get_live_item_count())
         while current_docs < initial_doc_count:
             batch_size = self.calculate_optimal_batch_size(initial_doc_count, current_docs, 10000)
+            self.no_of_docs = initial_doc_count - current_docs
             self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
                                     session_token=session_token, table=table, region_name=region_name,
                                     batch_size=batch_size, add_id_key=add_id_key)
-            current_docs = dynamo_object.get_live_item_count()
-
-        last_update_time = time.time()
+            current_docs = int(dynamo_object.get_live_item_count())
+        self.no_of_docs = 1
         while current_docs > initial_doc_count:
             self.delete_random_in_dynamodb(access_key=access_key, secret_key=secret_key,
                                            session_token=session_token, region_name=region_name,
                                            p_key=p_key, table=table)
-            current_time = time.time()
-            if current_time - last_update_time >= 20:
-                current_docs = dynamo_object.get_live_item_count()
-                last_update_time = current_time
+            current_docs -= 1
 
     def perform_crud_on_dynamodb(self, access_key, secret_key, region_name, p_key, session_token=None, table=None,
                                  num_buffer=0, add_id_key=False):
@@ -293,10 +293,14 @@ class DocLoader:
             else:
                 max_files = start_docs + num_buffer
                 min_files = max(int(start_docs - num_buffer), 0)
-
+            last_update_time = time.time()
             while True:
                 while not self.stop_dynamo_loader:
-                    current_docs = dynamo_object.get_live_item_count()
+                    current_docs = start_docs
+                    current_time = time.time()
+                    if current_time - last_update_time >= 120:
+                        current_docs = dynamo_object.get_live_item_count()
+                        last_update_time = current_time
                     operation = random.choice(["insert", "delete"])
                     if operation == "insert" and current_docs < max_files:
                         self.load_doc_to_dynamo(access_key=access_key, secret_key=secret_key,
