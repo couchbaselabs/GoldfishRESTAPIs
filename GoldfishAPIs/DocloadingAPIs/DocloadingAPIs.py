@@ -88,7 +88,7 @@ class DocloadingAPIs:
         response = requests.get(url, headers=headers, data=payload)
         return response
 
-    def drop_mongo_database(self, ip, database_name, collection_name, atlas_url=None, username=None, password=None,
+    def drop_mongo_database(self, ip, database_name, atlas_url=None, username=None, password=None,
                             headers=None,
                             port=27017):
         url = self.url + "mongo/delete_database"
@@ -101,7 +101,6 @@ class DocloadingAPIs:
             "username": username,
             "password": password,
             "database_name": database_name,
-            "collection_name": collection_name,
             "atlas_url": atlas_url
         })
 
