@@ -298,7 +298,7 @@ class DocLoader:
                 while not self.stop_dynamo_loader:
                     current_docs = start_docs
                     current_time = time.time()
-                    if current_time - last_update_time >= 120:
+                    if current_time - last_update_time >= 1200:
                         current_docs = dynamo_object.get_live_item_count()
                         last_update_time = current_time
                     operation = random.choice(["insert", "delete"])

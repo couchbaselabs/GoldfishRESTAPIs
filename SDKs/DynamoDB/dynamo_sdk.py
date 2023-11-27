@@ -66,7 +66,7 @@ class DynamoDb:
             self.logger.error(e)
 
     def create_table(self, table_name, key_schema,
-                     attribute_definitions, read_write_capacity_units, **params):
+                     attribute_definitions, read_write_capacity_units, on_demand=True, **params):
         """
         Create table in dynamoDb
         :param read_write_capacity_units: {'ReadCapacityUnits': read_capacity_units,
@@ -79,12 +79,13 @@ class DynamoDb:
         """
         table_params = {
             'TableName': table_name,
+            'BillingMode': 'PAY_PER_REQUEST',
             'KeySchema': [{'AttributeName': key, 'KeyType': value}
                           for key, value in key_schema.items()],
             'AttributeDefinitions': [{'AttributeName': key, 'AttributeType': value}
                                      for key, value in attribute_definitions.items()]
         }
-        if read_write_capacity_units:
+        if read_write_capacity_units and not on_demand:
             table_params['ProvisionedThroughput'] = read_write_capacity_units
         for key, value in params:
             table_params[key] = value

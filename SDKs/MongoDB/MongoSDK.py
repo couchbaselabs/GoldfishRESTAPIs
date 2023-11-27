@@ -95,9 +95,12 @@ class MongoSDK(MongoConfig):
 
         """
         collection = self.db[collection_name]
-        result = collection.insert_many(data_to_insert)
-        self.log.info(
-            f"Successfully inserted {len(result.inserted_ids)} documents.")
+        try:
+            result = collection.insert_many(data_to_insert)
+            self.log.info(
+                f"Successfully inserted {len(result.inserted_ids)} documents.")
+        except Exception as e:
+            self.log.info(str(e))
 
     def delete_document(self, collection_name, query):
         """

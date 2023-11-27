@@ -109,7 +109,7 @@ class MySQLSDK:
             # Handle exceptions
             print(f"Error during insert operation: {e}")
             self.connection.rollback()
-            raise Exception(err)
+            raise Exception(e)
 
     def update_record(self, table_name, set_values, condition):
         try:
